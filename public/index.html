@@ -668,11 +668,33 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Domain Registrar</label>
-            <input type="text" id="newSiteRegistrar" list="registrarList" placeholder="e.g. Namecheap, ExonHost" class="input w-full">
+            <select id="newSiteRegistrar" class="input w-full text-xs">
+              <option value="">Select Registrar</option>
+              <option value="Namecheap">Namecheap</option>
+              <option value="ExonHost">ExonHost</option>
+              <option value="GoDaddy">GoDaddy</option>
+              <option value="Cloudflare">Cloudflare</option>
+              <option value="Hostinger">Hostinger</option>
+              <option value="Porkbun">Porkbun</option>
+              <option value="other">Others (Type Name)</option>
+            </select>
+            <input type="text" id="newSiteRegistrarOther" placeholder="Type registrar name..." class="input w-full mt-1.5 hidden text-xs">
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Hosting / Server</label>
-            <input type="text" id="newSiteHosting" list="hostingList" placeholder="e.g. Shared, VPS" class="input w-full">
+            <select id="newSiteHosting" class="input w-full text-xs">
+              <option value="">Select Hosting</option>
+              <option value="Shared Hosting">Shared Hosting</option>
+              <option value="VPS Server">VPS Server</option>
+              <option value="ExonHost Shared">ExonHost Shared</option>
+              <option value="ExonHost VPS">ExonHost VPS</option>
+              <option value="Hetzner VPS">Hetzner VPS</option>
+              <option value="Contabo VPS">Contabo VPS</option>
+              <option value="Cloudflare Pages">Cloudflare Pages</option>
+              <option value="DigitalOcean">DigitalOcean</option>
+              <option value="other">Others (Type Name)</option>
+            </select>
+            <input type="text" id="newSiteHostingOther" placeholder="Type hosting name..." class="input w-full mt-1.5 hidden text-xs">
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Domain Expiry Date</label>
@@ -732,11 +754,33 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Domain Registrar</label>
-            <input type="text" id="editSiteRegistrar" list="registrarList" placeholder="e.g. Namecheap, ExonHost" class="input w-full">
+            <select id="editSiteRegistrar" class="input w-full text-xs">
+              <option value="">Select Registrar</option>
+              <option value="Namecheap">Namecheap</option>
+              <option value="ExonHost">ExonHost</option>
+              <option value="GoDaddy">GoDaddy</option>
+              <option value="Cloudflare">Cloudflare</option>
+              <option value="Hostinger">Hostinger</option>
+              <option value="Porkbun">Porkbun</option>
+              <option value="other">Others (Type Name)</option>
+            </select>
+            <input type="text" id="editSiteRegistrarOther" placeholder="Type registrar name..." class="input w-full mt-1.5 hidden text-xs">
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Hosting / Server</label>
-            <input type="text" id="editSiteHosting" list="hostingList" placeholder="e.g. Shared, VPS" class="input w-full">
+            <select id="editSiteHosting" class="input w-full text-xs">
+              <option value="">Select Hosting</option>
+              <option value="Shared Hosting">Shared Hosting</option>
+              <option value="VPS Server">VPS Server</option>
+              <option value="ExonHost Shared">ExonHost Shared</option>
+              <option value="ExonHost VPS">ExonHost VPS</option>
+              <option value="Hetzner VPS">Hetzner VPS</option>
+              <option value="Contabo VPS">Contabo VPS</option>
+              <option value="Cloudflare Pages">Cloudflare Pages</option>
+              <option value="DigitalOcean">DigitalOcean</option>
+              <option value="other">Others (Type Name)</option>
+            </select>
+            <input type="text" id="editSiteHostingOther" placeholder="Type hosting name..." class="input w-full mt-1.5 hidden text-xs">
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Domain Expiry Date</label>
@@ -830,25 +874,6 @@
   </div> <!-- /.app-layout -->
   </div> <!-- /#appContainer -->
 
-  <datalist id="registrarList">
-    <option value="Namecheap">
-    <option value="ExonHost">
-    <option value="GoDaddy">
-    <option value="Cloudflare">
-    <option value="Hostinger">
-    <option value="Porkbun">
-  </datalist>
-  <datalist id="hostingList">
-    <option value="Shared Hosting">
-    <option value="VPS Server">
-    <option value="ExonHost Shared">
-    <option value="ExonHost VPS">
-    <option value="Hetzner VPS">
-    <option value="Contabo VPS">
-    <option value="Cloudflare Pages">
-    <option value="DigitalOcean">
-  </datalist>
-
-  <script src="app.js?v=2.7"></script>
+  <script src="app.js?v=2.8"></script>
 </body>
 </html>

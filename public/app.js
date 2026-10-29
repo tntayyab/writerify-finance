@@ -239,8 +239,34 @@
   const editSiteUsername = document.getElementById('editSiteUsername');
   const editSiteStatus = document.getElementById('editSiteStatus');
   const editSiteRegistrar = document.getElementById('editSiteRegistrar');
+  const editSiteRegistrarOther = document.getElementById('editSiteRegistrarOther');
   const editSiteHosting = document.getElementById('editSiteHosting');
+  const editSiteHostingOther = document.getElementById('editSiteHostingOther');
   const editSiteDomainExpiry = document.getElementById('editSiteDomainExpiry');
+
+  const newSiteRegistrar = document.getElementById('newSiteRegistrar');
+  const newSiteRegistrarOther = document.getElementById('newSiteRegistrarOther');
+  const newSiteHosting = document.getElementById('newSiteHosting');
+  const newSiteHostingOther = document.getElementById('newSiteHostingOther');
+  const newSiteDomainExpiry = document.getElementById('newSiteDomainExpiry');
+
+  function setupOtherToggle(selectEl, otherInputEl) {
+    if (!selectEl || !otherInputEl) return;
+    selectEl.addEventListener('change', () => {
+      if (selectEl.value === 'other') {
+        otherInputEl.classList.remove('hidden');
+        otherInputEl.focus();
+      } else {
+        otherInputEl.classList.add('hidden');
+        otherInputEl.value = '';
+      }
+    });
+  }
+
+  setupOtherToggle(newSiteRegistrar, newSiteRegistrarOther);
+  setupOtherToggle(newSiteHosting, newSiteHostingOther);
+  setupOtherToggle(editSiteRegistrar, editSiteRegistrarOther);
+  setupOtherToggle(editSiteHosting, editSiteHostingOther);
 
   // Theme Engine (Light, Dark, System)
   function applyTheme(themeChoice) {
@@ -905,8 +931,58 @@
         editSiteName.value = site.site_name || '';
         editSiteUsername.value = site.username || '';
         editSiteStatus.value = site.status || 'running';
-        if (editSiteRegistrar) editSiteRegistrar.value = site.domain_registrar || '';
-        if (editSiteHosting) editSiteHosting.value = site.hosting_provider || '';
+
+        const presetRegistrars = ['Namecheap', 'ExonHost', 'GoDaddy', 'Cloudflare', 'Hostinger', 'Porkbun'];
+        const presetHosting = ['Shared Hosting', 'VPS Server', 'ExonHost Shared', 'ExonHost VPS', 'Hetzner VPS', 'Contabo VPS', 'Cloudflare Pages', 'DigitalOcean'];
+
+        const reg = (site.domain_registrar || '').trim();
+        if (!reg) {
+          if (editSiteRegistrar) editSiteRegistrar.value = '';
+          if (editSiteRegistrarOther) {
+            editSiteRegistrarOther.value = '';
+            editSiteRegistrarOther.classList.add('hidden');
+          }
+        } else {
+          const match = presetRegistrars.find(p => p.toLowerCase() === reg.toLowerCase());
+          if (match && editSiteRegistrar) {
+            editSiteRegistrar.value = match;
+            if (editSiteRegistrarOther) {
+              editSiteRegistrarOther.value = '';
+              editSiteRegistrarOther.classList.add('hidden');
+            }
+          } else {
+            if (editSiteRegistrar) editSiteRegistrar.value = 'other';
+            if (editSiteRegistrarOther) {
+              editSiteRegistrarOther.value = reg;
+              editSiteRegistrarOther.classList.remove('hidden');
+            }
+          }
+        }
+
+        const host = (site.hosting_provider || '').trim();
+        if (!host) {
+          if (editSiteHosting) editSiteHosting.value = '';
+          if (editSiteHostingOther) {
+            editSiteHostingOther.value = '';
+            editSiteHostingOther.classList.add('hidden');
+          }
+        } else {
+          const match = presetHosting.find(p => p.toLowerCase() === host.toLowerCase());
+          if (match && editSiteHosting) {
+            editSiteHosting.value = match;
+            if (editSiteHostingOther) {
+              editSiteHostingOther.value = '';
+              editSiteHostingOther.classList.add('hidden');
+            }
+          } else {
+            if (editSiteHosting) editSiteHosting.value = 'other';
+            if (editSiteHostingOther) {
+              editSiteHostingOther.value = host;
+              editSiteHostingOther.classList.remove('hidden');
+            }
+          }
+        }
+
         if (editSiteDomainExpiry) editSiteDomainExpiry.value = site.domain_expiry || '';
         editSiteModal.classList.remove('hidden');
       });
@@ -1346,8 +1422,17 @@
       const url = document.getElementById('newSiteUrl').value.trim();
       const username = document.getElementById('newSiteUsername').value.trim();
       const status = document.getElementById('newSiteStatus').value;
-      const domain_registrar = (document.getElementById('newSiteRegistrar')?.value || '').trim();
-      const hosting_provider = (document.getElementById('newSiteHosting')?.value || '').trim();
+
+      let domain_registrar = (newSiteRegistrar?.value || '').trim();
+      if (domain_registrar === 'other') {
+        domain_registrar = (newSiteRegistrarOther?.value || '').trim();
+      }
+
+      let hosting_provider = (newSiteHosting?.value || '').trim();
+      if (hosting_provider === 'other') {
+        hosting_provider = (newSiteHostingOther?.value || '').trim();
+      }
+
       const domain_expiry = (document.getElementById('newSiteDomainExpiry')?.value || '').trim();
       const ads = parseFloat(document.getElementById('newSiteAds').value) || 0;
       const amazon = parseFloat(document.getElementById('newSiteAmazon').value) || 0;
@@ -1372,6 +1457,14 @@
       showToast('New site added to database ✓');
       addSiteModal.classList.add('hidden');
       addSiteForm.reset();
+      if (newSiteRegistrarOther) {
+        newSiteRegistrarOther.value = '';
+        newSiteRegistrarOther.classList.add('hidden');
+      }
+      if (newSiteHostingOther) {
+        newSiteHostingOther.value = '';
+        newSiteHostingOther.classList.add('hidden');
+      }
       await Promise.all([loadSummary(), loadSites()]);
     });
 
@@ -1383,8 +1476,17 @@
       const siteName = editSiteName.value.trim();
       const username = editSiteUsername.value.trim();
       const status = editSiteStatus.value;
-      const domain_registrar = (editSiteRegistrar?.value || '').trim();
-      const hosting_provider = (editSiteHosting?.value || '').trim();
+
+      let domain_registrar = (editSiteRegistrar?.value || '').trim();
+      if (domain_registrar === 'other') {
+        domain_registrar = (editSiteRegistrarOther?.value || '').trim();
+      }
+
+      let hosting_provider = (editSiteHosting?.value || '').trim();
+      if (hosting_provider === 'other') {
+        hosting_provider = (editSiteHostingOther?.value || '').trim();
+      }
+
       const domain_expiry = (editSiteDomainExpiry?.value || '').trim();
 
       await apiFetch(`/api/sites/${siteId}`, {
