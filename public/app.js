@@ -673,14 +673,14 @@
       if (total === 0) {
         sitesTableBody.innerHTML = `
           <tr>
-            <td colspan="11" class="text-center py-16 text-slate-400">
-              <div class="flex flex-col items-center justify-center gap-3">
-                <div class="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-3xl shadow-inner">
+            <td colspan="8" class="text-center py-12 px-4 text-slate-400">
+              <div class="flex flex-col items-center justify-center gap-2.5 max-w-xs mx-auto">
+                <div class="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-2xl shadow-inner">
                   🌐
                 </div>
                 <h3 class="text-base font-bold text-slate-200">No Websites Added Yet</h3>
-                <p class="text-xs text-slate-400 max-w-sm">Your portfolio is completely clean and ready. Click the button below to add your first website and start tracking revenue.</p>
-                <button id="emptyStateAddSiteBtn" class="btn-primary mt-2 flex items-center gap-2">
+                <p class="text-xs text-slate-400">Your portfolio is completely clean and ready. Click below to add your first website.</p>
+                <button id="emptyStateAddSiteBtn" class="btn-primary mt-1 text-xs flex items-center gap-1.5 px-4 py-2">
                   <span>➕ Add Your First Website</span>
                 </button>
               </div>
@@ -696,7 +696,7 @@
       } else {
         sitesTableBody.innerHTML = `
           <tr>
-            <td colspan="11" class="text-center py-10 text-slate-400 italic">
+            <td colspan="8" class="text-center py-10 text-slate-400 italic">
               No websites match your filter or search criteria.
             </td>
           </tr>

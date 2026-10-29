@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Writerify Portfolio & Revenue Command Center</title>
-  <link rel="stylesheet" href="styles.css?v=2.5">
+  <link rel="stylesheet" href="styles.css?v=2.6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -175,31 +175,31 @@
       <div class="app-main-wrapper">
         <!-- Top Navbar (Mobile / Tablet Bar & Quick Actions) -->
         <header class="app-topbar">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 sm:gap-3 min-w-0">
             <button id="toggleSidebarBtn" class="topbar-menu-btn" aria-label="Toggle Sidebar Menu" title="Toggle Sidebar (☰)">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
-            <div class="flex items-center gap-2">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center font-bold text-sm text-white shadow-md shadow-brand-500/20">
+            <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center font-bold text-xs sm:text-sm text-white shadow-md shadow-brand-500/20 shrink-0">
                 👑
               </div>
-              <div>
-                <h1 class="text-sm sm:text-base font-extrabold text-white tracking-tight flex items-center gap-1.5 leading-tight">
-                  WRITERIFY <span class="text-brand-400 font-extrabold">FINANCE</span>
+              <div class="min-w-0">
+                <h1 class="text-xs sm:text-base font-extrabold text-white tracking-tight flex items-center gap-1 leading-tight truncate">
+                  WRITERIFY <span class="text-brand-400 font-extrabold hidden xs:inline">FINANCE</span>
                 </h1>
                 <p class="hidden sm:block text-[11px] text-slate-400 leading-tight">Portfolio & Revenue Command Center • Boss TN TAYYAB</p>
               </div>
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <!-- Mobile Month Pill -->
             <div class="topbar-month-pill lg:hidden">
               <span id="topbarMonthDisplay" class="font-bold text-xs text-brand-300 font-mono">Oct 2026</span>
             </div>
 
             <!-- Quick Add Site Button -->
-            <button id="topbarAddSiteBtn" class="btn-primary text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg shadow-sm">
+            <button id="topbarAddSiteBtn" class="btn-primary text-xs flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg shadow-sm" title="Add New Website">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
               <span class="hidden sm:inline">Add Site</span>
             </button>
@@ -213,26 +213,26 @@
           <section id="missionSection" class="space-y-6">
 
     <!-- Mission Header & Gauges Card -->
-    <div class="card p-6 border-brand-500/30 bg-gradient-to-br from-card to-card-alt relative overflow-hidden shadow-2xl">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div class="card p-4 sm:p-6 border-brand-500/30 bg-gradient-to-br from-card to-card-alt relative overflow-hidden shadow-2xl">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
         <div>
           <div class="flex items-center gap-2">
             <span class="p-1.5 rounded-lg bg-brand-500/20 text-brand-400">
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"/></svg>
             </span>
-            <h2 class="text-2xl font-extrabold text-white tracking-tight">Mission</h2>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">Mission</h2>
           </div>
-          <p id="missionSubtitle" class="text-sm font-semibold text-brand-300 mt-1">
+          <p id="missionSubtitle" class="text-xs sm:text-sm font-semibold text-brand-300 mt-1">
             500 sites — $15,000 every month
           </p>
         </div>
 
         <!-- 2 Big Radial Progress Gauges -->
-        <div class="flex flex-wrap items-center gap-6">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 w-full md:w-auto mt-3 md:mt-0">
           <!-- Monthly Income Gauge -->
-          <div class="flex items-center gap-4 bg-dark/60 p-3.5 rounded-2xl border border-border">
-            <div class="relative w-20 h-20 flex items-center justify-center">
-              <svg class="w-20 h-20 -rotate-90">
+          <div class="flex items-center gap-3 bg-dark/60 p-3 rounded-2xl border border-border w-full sm:w-auto flex-1">
+            <div class="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 flex items-center justify-center">
+              <svg class="w-16 h-16 sm:w-20 sm:h-20 -rotate-90" viewBox="0 0 80 80">
                 <circle cx="40" cy="40" r="34" stroke-width="7" class="gauge-track" fill="transparent" />
                 <circle id="incomeGaugeCircle" cx="40" cy="40" r="34" stroke="currentColor" stroke-width="7" class="text-brand-500 transition-all duration-700" stroke-linecap="round" fill="transparent" stroke-dasharray="213.6" stroke-dashoffset="213.6" />
               </svg>
@@ -240,34 +240,34 @@
                 <span id="incomeGaugePct" class="text-xs font-bold font-mono text-white">0%</span>
               </div>
             </div>
-            <div>
-              <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Monthly Income Goal</div>
-              <div class="text-base font-bold text-white flex items-baseline gap-1 mt-0.5">
-                <span id="incomeGaugeCurrent" class="text-lg font-mono text-brand-400">$0</span>
-                <span id="incomeGaugeTarget" class="text-xs text-slate-400 font-mono">of $15,000</span>
+            <div class="min-w-0">
+              <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">Monthly Income Goal</div>
+              <div class="text-sm sm:text-base font-bold text-white flex items-baseline gap-1 mt-0.5">
+                <span id="incomeGaugeCurrent" class="text-base sm:text-lg font-mono text-brand-400">$0</span>
+                <span id="incomeGaugeTarget" class="text-[11px] sm:text-xs text-slate-400 font-mono">of $15,000</span>
               </div>
               <div id="incomeGaugeDelta" class="text-xs font-semibold text-amber-400 mt-0.5 font-mono">+$15,000 to go</div>
             </div>
           </div>
 
           <!-- Portfolio Goal Gauge -->
-          <div class="flex items-center gap-4 bg-dark/60 p-3.5 rounded-2xl border border-border">
-            <div class="relative w-20 h-20 flex items-center justify-center">
-              <svg class="w-20 h-20 -rotate-90">
+          <div class="flex items-center gap-3 bg-dark/60 p-3 rounded-2xl border border-border w-full sm:w-auto flex-1">
+            <div class="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 flex items-center justify-center">
+              <svg class="w-16 h-16 sm:w-20 sm:h-20 -rotate-90" viewBox="0 0 80 80">
                 <circle cx="40" cy="40" r="34" stroke-width="7" class="gauge-track" fill="transparent" />
                 <circle id="portfolioGaugeCircle" cx="40" cy="40" r="34" stroke="currentColor" stroke-width="7" class="text-cyan-400 transition-all duration-700" stroke-linecap="round" fill="transparent" stroke-dasharray="213.6" stroke-dashoffset="213.6" />
               </svg>
               <div class="absolute inset-0 flex flex-col items-center justify-center">
-                <span id="portfolioGaugePct" class="text-xs font-bold font-mono text-white">8%</span>
+                <span id="portfolioGaugePct" class="text-xs font-bold font-mono text-white">0%</span>
               </div>
             </div>
-            <div>
-              <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Portfolio Goal</div>
-              <div class="text-base font-bold text-white flex items-baseline gap-1 mt-0.5">
-                <span id="portfolioGaugeCurrent" class="text-lg font-mono text-cyan-400">0 running</span>
-                <span id="portfolioGaugeTarget" class="text-xs text-slate-400 font-mono">of 500 sites</span>
+            <div class="min-w-0">
+              <div class="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">Portfolio Goal</div>
+              <div class="text-sm sm:text-base font-bold text-white flex items-baseline gap-1 mt-0.5">
+                <span id="portfolioGaugeCurrent" class="text-base sm:text-lg font-mono text-cyan-400">0 running</span>
+                <span id="portfolioGaugeTarget" class="text-[11px] sm:text-xs text-slate-400 font-mono">of 500 sites</span>
               </div>
-              <div id="portfolioGaugeDelta" class="text-xs font-semibold text-cyan-300 mt-0.5 font-mono">461 sites to go</div>
+              <div id="portfolioGaugeDelta" class="text-xs font-semibold text-cyan-300 mt-0.5 font-mono">500 sites to go</div>
             </div>
           </div>
         </div>
@@ -374,7 +374,7 @@
             <span id="incomeMixTotalLabel" class="text-xs font-mono font-bold text-brand-300">$0</span>
           </div>
           <div class="relative flex items-center justify-center my-4">
-            <svg id="incomeMixSvg" class="w-44 h-44 -rotate-90">
+            <svg id="incomeMixSvg" viewBox="0 0 176 176" class="w-36 h-36 sm:w-44 sm:h-44 -rotate-90">
               <!-- Circles injected by app.js -->
             </svg>
             <div id="incomeMixCenterText" class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
@@ -411,17 +411,17 @@
       <!-- 12-Month Performance Trend -->
       <div class="lg:col-span-8 card p-5 flex flex-col justify-between">
         <div>
-          <div class="flex items-center justify-between mb-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h3 class="text-sm font-bold text-white">12-month trend</h3>
               <p class="text-xs text-slate-400">Income vs. Cost, month-by-month trajectory</p>
             </div>
-            <div class="flex items-center gap-3">
-              <div class="flex items-center gap-2 text-xs">
+            <div class="flex flex-wrap items-center gap-2.5 text-xs">
+              <div class="flex items-center gap-1.5">
                 <span class="w-2.5 h-2.5 rounded bg-brand-500"></span>
                 <span class="text-slate-400">Income</span>
               </div>
-              <div class="flex items-center gap-2 text-xs">
+              <div class="flex items-center gap-1.5">
                 <span class="w-2.5 h-2.5 rounded bg-rose-500"></span>
                 <span class="text-slate-400">Cost</span>
               </div>
@@ -431,8 +431,10 @@
             </div>
           </div>
           <!-- Bar Chart Container -->
-          <div id="trendChartContainer" class="h-44 flex items-end gap-2 pt-4 px-2">
-            <!-- Dynamically populated bars -->
+          <div class="overflow-x-auto w-full pb-2">
+            <div id="trendChartContainer" class="h-44 flex items-end gap-2 pt-4 px-2 min-w-[420px]">
+              <!-- Dynamically populated bars -->
+            </div>
           </div>
         </div>
       </div>
@@ -470,23 +472,23 @@
     <!-- Sites Table Section -->
     <div class="card overflow-hidden">
       <!-- Sites Table Action Bar -->
-      <div class="p-4 border-b border-border bg-card/60 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div class="p-3 sm:p-4 border-b border-border bg-card/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div class="flex items-center gap-2">
           <span class="text-sm font-bold text-white flex items-center gap-1.5">
             <span>Sites</span>
             <span id="sitesHeaderCount" class="text-xs font-mono px-2 py-0.5 rounded-md bg-dark border border-border text-slate-300">0</span>
           </span>
-          <span class="text-xs text-slate-400">• Click any value to inline edit & auto-save</span>
+          <span class="text-xs text-slate-400 truncate">• Click to edit & auto-save</span>
         </div>
 
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 w-full sm:w-auto">
           <!-- Quick search -->
-          <div class="relative">
-            <input type="text" id="siteSearchInput" placeholder="Search site or username..." class="input pl-8 pr-3 py-1.5 text-xs w-60">
+          <div class="relative flex-1 sm:w-60">
+            <input type="text" id="siteSearchInput" placeholder="Search site or username..." class="input pl-8 pr-3 py-1.5 text-xs w-full">
             <svg class="w-4 h-4 text-slate-400 absolute left-2.5 top-2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           </div>
 
-          <button id="openAddSiteModalBtn" class="btn-primary text-xs flex items-center gap-1.5">
+          <button id="openAddSiteModalBtn" class="btn-primary text-xs flex items-center gap-1.5 shrink-0 px-3 py-1.5">
             <span>+</span> Add Site
           </button>
         </div>
@@ -526,7 +528,7 @@
 
     <!-- Detailed Costs Ledger Section -->
     <div class="card p-5 space-y-4">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/80 pb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
         <div>
           <div class="flex items-center gap-2">
             <span class="text-base font-bold text-white">Costs</span>
@@ -535,21 +537,23 @@
           <p class="text-xs text-slate-400 mt-0.5">Detailed spend ledger — separate from the per-site monthly numbers (Hosting, Domains, Writers, Tools, VAs)</p>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <!-- Ledger Filter Tabs -->
-          <div class="flex items-center bg-dark p-1 rounded-lg border border-border text-xs">
-            <button class="ledger-tab active" data-range="thisMonth">This month</button>
-            <button class="ledger-tab" data-range="lastMonth">Last month</button>
-            <button class="ledger-tab" data-range="thisYear">This Year</button>
-            <button class="ledger-tab" data-range="all">Lifetime</button>
+          <div class="flex items-center bg-dark p-1 rounded-lg border border-border text-xs max-w-full overflow-x-auto">
+            <button class="ledger-tab active whitespace-nowrap" data-range="thisMonth">This month</button>
+            <button class="ledger-tab whitespace-nowrap" data-range="lastMonth">Last month</button>
+            <button class="ledger-tab whitespace-nowrap" data-range="thisYear">This Year</button>
+            <button class="ledger-tab whitespace-nowrap" data-range="all">Lifetime</button>
           </div>
 
-          <button id="exportExpensesCsvBtn" class="btn-secondary text-xs">
-            Export CSV
-          </button>
-          <button id="openAddCostModalBtn" class="btn-primary text-xs">
-            + Add Cost
-          </button>
+          <div class="flex items-center gap-2">
+            <button id="exportExpensesCsvBtn" class="btn-secondary text-xs">
+              Export CSV
+            </button>
+            <button id="openAddCostModalBtn" class="btn-primary text-xs">
+              + Add Cost
+            </button>
+          </div>
         </div>
       </div>
 
@@ -646,7 +650,7 @@
           <label class="block text-xs font-medium text-slate-300 mb-1">Website URL *</label>
           <input type="url" id="newSiteUrl" placeholder="https://techmoviez.com/" class="input w-full" required>
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Author / Persona Name</label>
             <input type="text" id="newSiteUsername" placeholder="e.g. Alex" class="input w-full">
@@ -661,7 +665,7 @@
             </select>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-2 gap-2.5">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Ads ($)</label>
             <input type="number" id="newSiteAds" step="0.01" placeholder="0" class="input w-full font-mono">
@@ -671,9 +675,9 @@
             <input type="number" id="newSiteAmazon" step="0.01" placeholder="0" class="input w-full font-mono">
           </div>
         </div>
-        <div class="flex justify-end gap-2 pt-3 border-t border-border">
-          <button type="button" class="close-modal btn-secondary text-xs" onclick="document.getElementById('addSiteModal').classList.add('hidden')">Cancel</button>
-          <button type="submit" class="btn-primary text-xs">Save Site to DB</button>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-border">
+          <button type="button" class="close-modal btn-secondary text-xs px-3.5 py-2" onclick="document.getElementById('addSiteModal').classList.add('hidden')">Cancel</button>
+          <button type="submit" class="btn-primary text-xs px-4 py-2 font-bold whitespace-nowrap">Save Site to DB</button>
         </div>
       </form>
     </div>
@@ -696,7 +700,7 @@
           <label class="block text-xs font-medium text-slate-300 mb-1">Website URL *</label>
           <input type="url" id="editSiteUrl" class="input w-full" placeholder="https://techmoviez.com/" required>
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Author / Persona Name</label>
             <input type="text" id="editSiteUsername" placeholder="e.g. Ethan" class="input w-full">
@@ -711,9 +715,9 @@
             </select>
           </div>
         </div>
-        <div class="flex justify-end gap-2 pt-3 border-t border-border">
-          <button type="button" class="close-modal btn-secondary text-xs" onclick="document.getElementById('editSiteModal').classList.add('hidden')">Cancel</button>
-          <button type="submit" class="btn-primary text-xs">Save Changes</button>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-border">
+          <button type="button" class="close-modal btn-secondary text-xs px-3.5 py-2" onclick="document.getElementById('editSiteModal').classList.add('hidden')">Cancel</button>
+          <button type="submit" class="btn-primary text-xs px-4 py-2 font-bold whitespace-nowrap">Save Changes</button>
         </div>
       </form>
     </div>
@@ -727,7 +731,7 @@
         <button type="button" class="close-modal btn-icon" onclick="document.getElementById('addCostModal').classList.add('hidden')">✕</button>
       </div>
       <form id="addCostForm" class="mt-4 space-y-4">
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Date *</label>
             <input type="date" id="newCostDate" class="input w-full" required>
@@ -750,7 +754,7 @@
           <label class="block text-xs font-medium text-slate-300 mb-1">Description / Title *</label>
           <input type="text" id="newCostTitle" placeholder="e.g. Hetzner Dedicated Server Renewal" class="input w-full" required>
         </div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Amount ($ USD) *</label>
             <input type="number" id="newCostAmount" step="0.01" min="0.01" placeholder="50.00" class="input w-full font-mono" required>
@@ -762,9 +766,9 @@
             </select>
           </div>
         </div>
-        <div class="flex justify-end gap-2 pt-3 border-t border-border">
-          <button type="button" class="close-modal btn-secondary text-xs" onclick="document.getElementById('addCostModal').classList.add('hidden')">Cancel</button>
-          <button type="submit" class="btn-primary text-xs">Add to Ledger</button>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-border">
+          <button type="button" class="close-modal btn-secondary text-xs px-3.5 py-2" onclick="document.getElementById('addCostModal').classList.add('hidden')">Cancel</button>
+          <button type="submit" class="btn-primary text-xs px-4 py-2 font-bold whitespace-nowrap">Add to Ledger</button>
         </div>
       </form>
     </div>
@@ -798,6 +802,6 @@
   </div> <!-- /.app-layout -->
   </div> <!-- /#appContainer -->
 
-  <script src="app.js?v=2.5"></script>
+  <script src="app.js?v=2.6"></script>
 </body>
 </html>
