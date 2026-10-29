@@ -1,0 +1,11 @@
+# SQLite database files and WAL logs
+data/kyros_portfolio.db
+data/kyros_portfolio.db-shm
+data/kyros_portfolio.db-wal
+data/backups/
+
+# Logs and system
+*.log
+.DS_Store
+Thumbs.db
+node_modules/

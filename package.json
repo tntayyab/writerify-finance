@@ -1,0 +1,13 @@
+{
+  "name": "kyros-portfolio-command-center",
+  "version": "1.0.0",
+  "description": "KYROS Supreme Website Portfolio, Multi-Channel Revenue & Expense Management System with Persistent SQLite Database",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "keywords": ["kyros", "portfolio", "adsense", "amazon", "revenue", "analytics", "sqlite"],
+  "author": "Messi (Chief AI Manager for Boss TN TAYYAB)",
+  "license": "UNLICENSED"
+}
