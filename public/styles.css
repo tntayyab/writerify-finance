@@ -879,6 +879,17 @@ circle {
   flex-direction: column;
   min-width: 0;
   min-height: 100vh;
+  transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Sidebar Collapsed State (Desktop & Tablet) */
+body.sidebar-collapsed .app-sidebar {
+  transform: translateX(-100%);
+  box-shadow: none;
+}
+
+body.sidebar-collapsed .app-main-wrapper {
+  margin-left: 0;
 }
 
 .app-topbar {
@@ -948,8 +959,22 @@ circle {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 700;
   cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.sidebar-close-btn:hover {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: var(--rose-400);
+  transform: scale(1.08);
+}
+
+.sidebar-close-btn:active {
+  transform: scale(0.92);
 }
 
 /* Sidebar Month Navigator */
@@ -1197,7 +1222,7 @@ circle {
 
 /* Topbar Styles */
 .topbar-menu-btn {
-  display: none;
+  display: flex;
   background: var(--bg-card-alt);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -1207,6 +1232,19 @@ circle {
   cursor: pointer;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.topbar-menu-btn:hover {
+  background: var(--border);
+  border-color: var(--brand-500);
+  color: var(--brand-400);
+  transform: scale(1.05);
+}
+
+.topbar-menu-btn:active {
+  transform: scale(0.95);
 }
 
 .topbar-month-pill {
@@ -1226,11 +1264,11 @@ circle {
   }
 
   .app-sidebar.open {
-    transform: translateX(0);
+    transform: translateX(0) !important;
   }
 
   .app-main-wrapper {
-    margin-left: 0;
+    margin-left: 0 !important;
   }
 
   .topbar-menu-btn {

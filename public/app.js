@@ -1015,33 +1015,82 @@
       });
     });
 
-    // Mobile Sidebar Drawer Controls
+    // Sidebar Controls (Desktop Collapsible & Mobile Drawer)
     const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
     const closeSidebarBtn = document.getElementById('closeSidebarBtn');
     const sidebarBackdrop = document.getElementById('sidebarBackdrop');
     const appSidebar = document.getElementById('appSidebar');
 
+    function isMobileView() {
+      return window.innerWidth < 1024;
+    }
+
     function openSidebar() {
-      if (appSidebar) appSidebar.classList.add('open');
-      if (sidebarBackdrop) sidebarBackdrop.classList.add('active');
+      if (isMobileView()) {
+        if (appSidebar) appSidebar.classList.add('open');
+        if (sidebarBackdrop) sidebarBackdrop.classList.add('active');
+      } else {
+        document.body.classList.remove('sidebar-collapsed');
+        localStorage.setItem('writerify_sidebar_desktop', 'expanded');
+      }
     }
 
     function closeSidebar() {
-      if (appSidebar) appSidebar.classList.remove('open');
-      if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+      if (isMobileView()) {
+        if (appSidebar) appSidebar.classList.remove('open');
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+      } else {
+        document.body.classList.add('sidebar-collapsed');
+        localStorage.setItem('writerify_sidebar_desktop', 'collapsed');
+      }
+    }
+
+    function toggleSidebar() {
+      if (isMobileView()) {
+        const isOpen = appSidebar && appSidebar.classList.contains('open');
+        if (isOpen) {
+          closeSidebar();
+        } else {
+          openSidebar();
+        }
+      } else {
+        const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+        if (isCollapsed) {
+          openSidebar();
+        } else {
+          closeSidebar();
+        }
+      }
     }
 
     if (toggleSidebarBtn) {
-      toggleSidebarBtn.addEventListener('click', openSidebar);
-      toggleSidebarBtn.addEventListener('touchend', (e) => { e.preventDefault(); openSidebar(); });
+      toggleSidebarBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleSidebar();
+      });
+      toggleSidebarBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        toggleSidebar();
+      });
     }
+
     if (closeSidebarBtn) {
-      closeSidebarBtn.addEventListener('click', closeSidebar);
-      closeSidebarBtn.addEventListener('touchend', (e) => { e.preventDefault(); closeSidebar(); });
+      closeSidebarBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeSidebar();
+      });
+      closeSidebarBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        closeSidebar();
+      });
     }
+
     if (sidebarBackdrop) {
       sidebarBackdrop.addEventListener('click', closeSidebar);
-      sidebarBackdrop.addEventListener('touchend', (e) => { e.preventDefault(); closeSidebar(); });
+      sidebarBackdrop.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        closeSidebar();
+      });
     }
 
     // Sidebar Navigation Links Smooth Scroll
@@ -1052,7 +1101,9 @@
           e.preventDefault();
           document.querySelectorAll('.sidebar-nav-item').forEach(n => n.classList.remove('active'));
           item.classList.add('active');
-          closeSidebar();
+          if (isMobileView()) {
+            closeSidebar();
+          }
           const targetElem = document.querySelector(targetId);
           if (targetElem) {
             targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1060,6 +1111,11 @@
         }
       });
     });
+
+    // Check desktop saved preference on initialization
+    if (!isMobileView() && localStorage.getItem('writerify_sidebar_desktop') === 'collapsed') {
+      document.body.classList.add('sidebar-collapsed');
+    }
 
     // Topbar Add Site button
     const topbarAddSiteBtn = document.getElementById('topbarAddSiteBtn');
