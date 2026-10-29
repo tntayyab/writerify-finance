@@ -1,8 +1,8 @@
 @echo off
-title KYROS Portfolio Command Center
+title Writerify Finance Command Center
 cd /d "%~dp0"
 echo ========================================================
-echo   👑 KYROS PORTFOLIO & REVENUE COMMAND CENTER
+echo   👑 WRITERIFY FINANCE COMMAND CENTER
 echo   Supreme Authority: Boss TN TAYYAB
 echo   Custodian: Messi (Chief AI Manager)
 echo   Live Web Hub: http://localhost:5050
