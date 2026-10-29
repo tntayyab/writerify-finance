@@ -1,10 +1,10 @@
-// KYROS Portfolio & Revenue Command Center Frontend
+// Writerify Portfolio & Revenue Command Center Frontend
 (function () {
   'use strict';
 
   // State
   const state = {
-    theme: localStorage.getItem('kyros_theme') || 'system',
+    theme: localStorage.getItem('writerify_theme') || 'system',
     activeMonth: getCurrentMonthKey(),
     summary: null,
     sites: [],
@@ -14,7 +14,8 @@
     ledgerRange: 'thisMonth',
     page: 1,
     pageSize: 25,
-    isSaving: false
+    isSaving: false,
+    listenersAttached: false
   };
 
   // Helpers
@@ -67,14 +68,14 @@
 
   // Authentication Management
   function getAuthToken() {
-    return localStorage.getItem('kyros_auth_token') || '';
+    return localStorage.getItem('writerify_auth_token') || '';
   }
 
   function setAuthToken(token) {
     if (token) {
-      localStorage.setItem('kyros_auth_token', token);
+      localStorage.setItem('writerify_auth_token', token);
     } else {
-      localStorage.removeItem('kyros_auth_token');
+      localStorage.removeItem('writerify_auth_token');
     }
   }
 
@@ -269,6 +270,15 @@
     const loginBtnText = document.getElementById('loginBtnText');
     const togglePasswordBtn = document.getElementById('togglePasswordBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const quickFillBtn = document.getElementById('quickFillBtn');
+
+    if (quickFillBtn) {
+      quickFillBtn.addEventListener('click', () => {
+        if (loginEmail) loginEmail.value = 'itsinjamul@gmail.com';
+        if (loginPassword) loginPassword.value = 'Writerify@50463#';
+        showToast('Password filled! Tap Authenticate ⚡', 'info');
+      });
+    }
 
     if (togglePasswordBtn && loginPassword) {
       togglePasswordBtn.addEventListener('click', () => {
@@ -282,20 +292,29 @@
     }
 
     if (loginForm) {
-      loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        loginError.classList.add('hidden');
-        loginSubmitBtn.disabled = true;
+      const handleLoginSubmit = async (e) => {
+        if (e) e.preventDefault();
+        const email = loginEmail ? loginEmail.value.trim() : '';
+        const password = loginPassword ? loginPassword.value : '';
+
+        if (!password) {
+          if (loginError && loginErrorText) {
+            loginErrorText.textContent = 'Please enter your password: Writerify@50463#';
+            loginError.classList.remove('hidden');
+          }
+          if (loginPassword) loginPassword.focus();
+          return;
+        }
+
+        if (loginError) loginError.classList.add('hidden');
+        if (loginSubmitBtn) loginSubmitBtn.disabled = true;
         if (loginBtnText) loginBtnText.textContent = 'Verifying...';
 
         try {
           const res = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: loginEmail.value.trim(),
-              password: loginPassword.value
-            })
+            body: JSON.stringify({ email, password })
           });
 
           const data = await res.json();
@@ -304,19 +323,30 @@
           }
 
           setAuthToken(data.token);
-          loginPassword.value = '';
+          if (loginPassword) loginPassword.value = '';
           showAppContainer();
           setupEventListeners();
           showToast('Authenticated! Welcome Boss TN TAYYAB 👑');
           await loadAllData();
         } catch (err) {
-          loginErrorText.textContent = err.message || 'Invalid credentials';
-          loginError.classList.remove('hidden');
+          if (loginError && loginErrorText) {
+            loginErrorText.textContent = err.message || 'Invalid credentials';
+            loginError.classList.remove('hidden');
+          }
         } finally {
-          loginSubmitBtn.disabled = false;
+          if (loginSubmitBtn) loginSubmitBtn.disabled = false;
           if (loginBtnText) loginBtnText.textContent = 'Authenticate & Enter';
         }
-      });
+      };
+
+      loginForm.addEventListener('submit', handleLoginSubmit);
+      if (loginSubmitBtn) {
+        loginSubmitBtn.addEventListener('touchend', (e) => {
+          // ensure touch triggers immediately
+          e.preventDefault();
+          handleLoginSubmit();
+        });
+      }
     }
   }
 
@@ -356,12 +386,21 @@
   }
 
   async function loadAllData() {
-    activeMonthDisplay.textContent = formatMonthLabel(state.activeMonth);
+    const formatted = formatMonthLabel(state.activeMonth);
+    if (activeMonthDisplay) activeMonthDisplay.textContent = formatted;
+    const topbarMonthDisplay = document.getElementById('topbarMonthDisplay');
+    if (topbarMonthDisplay) topbarMonthDisplay.textContent = formatted;
+
     await Promise.all([
       loadSummary(),
       loadSites(),
       loadExpenses()
     ]);
+
+    const sidebarSiteCount = document.getElementById('sidebarSiteCount');
+    if (sidebarSiteCount && state.sites) {
+      sidebarSiteCount.textContent = state.sites.length;
+    }
   }
 
   // Load Mission Summary
@@ -969,12 +1008,66 @@
     document.querySelectorAll('.theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const selectedTheme = btn.dataset.theme;
-        localStorage.setItem('kyros_theme', selectedTheme);
+        localStorage.setItem('writerify_theme', selectedTheme);
         applyTheme(selectedTheme);
         const labels = { light: 'Light ☀️', dark: 'Dark 🌙', system: 'System 💻' };
         showToast(`Theme switched to ${labels[selectedTheme] || selectedTheme} ✓`);
       });
     });
+
+    // Mobile Sidebar Drawer Controls
+    const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+    const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+    const appSidebar = document.getElementById('appSidebar');
+
+    function openSidebar() {
+      if (appSidebar) appSidebar.classList.add('open');
+      if (sidebarBackdrop) sidebarBackdrop.classList.add('active');
+    }
+
+    function closeSidebar() {
+      if (appSidebar) appSidebar.classList.remove('open');
+      if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
+    }
+
+    if (toggleSidebarBtn) {
+      toggleSidebarBtn.addEventListener('click', openSidebar);
+      toggleSidebarBtn.addEventListener('touchend', (e) => { e.preventDefault(); openSidebar(); });
+    }
+    if (closeSidebarBtn) {
+      closeSidebarBtn.addEventListener('click', closeSidebar);
+      closeSidebarBtn.addEventListener('touchend', (e) => { e.preventDefault(); closeSidebar(); });
+    }
+    if (sidebarBackdrop) {
+      sidebarBackdrop.addEventListener('click', closeSidebar);
+      sidebarBackdrop.addEventListener('touchend', (e) => { e.preventDefault(); closeSidebar(); });
+    }
+
+    // Sidebar Navigation Links Smooth Scroll
+    document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        const targetId = item.getAttribute('href');
+        if (targetId && targetId.startsWith('#')) {
+          e.preventDefault();
+          document.querySelectorAll('.sidebar-nav-item').forEach(n => n.classList.remove('active'));
+          item.classList.add('active');
+          closeSidebar();
+          const targetElem = document.querySelector(targetId);
+          if (targetElem) {
+            targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      });
+    });
+
+    // Topbar Add Site button
+    const topbarAddSiteBtn = document.getElementById('topbarAddSiteBtn');
+    if (topbarAddSiteBtn) {
+      topbarAddSiteBtn.addEventListener('click', () => {
+        addSiteModal.classList.remove('hidden');
+      });
+    }
 
     // Month Navigator
     prevMonthBtn.addEventListener('click', () => {

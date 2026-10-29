@@ -467,7 +467,7 @@ export default async function handler(req, res) {
           csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
         });
 
-        res.setHeader('Content-Disposition', `attachment; filename="kyros_sites_${monthKey}.csv"`);
+        res.setHeader('Content-Disposition', `attachment; filename="writerify_sites_${monthKey}.csv"`);
         return sendText(res, 200, csv, 'text/csv');
       }
 
@@ -477,7 +477,7 @@ export default async function handler(req, res) {
         (expenses || []).forEach(e => {
           csv += `"${e.id}","${e.expense_date}","${e.month_key}","${e.site_id || ''}","${e.category}","${(e.title || '').replace(/"/g, '""')}",${(parseFloat(e.amount) || 0).toFixed(2)},"${e.receipt_url || ''}"\n`;
         });
-        res.setHeader('Content-Disposition', 'attachment; filename="kyros_expenses_ledger.csv"');
+        res.setHeader('Content-Disposition', 'attachment; filename="writerify_expenses_ledger.csv"');
         return sendText(res, 200, csv, 'text/csv');
       }
     }
@@ -499,7 +499,7 @@ export default async function handler(req, res) {
         expenses: expensesRes.data || []
       };
 
-      res.setHeader('Content-Disposition', `attachment; filename="kyros_portfolio_full_backup_${Date.now()}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="writerify_portfolio_full_backup_${Date.now()}.json"`);
       return sendJson(res, 200, backup);
     }
 

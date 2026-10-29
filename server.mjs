@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 const ADMIN_EMAIL = 'itsinjamul@gmail.com';
 const ADMIN_PASSWORD = 'Writerify@50463#';
-const AUTH_SECRET = 'KYROS_SECURE_AUTH_KEY_2026_WRITERIFY_50463';
+const AUTH_SECRET = 'WRITERIFY_SECURE_AUTH_KEY_2026_50463';
 
 function createToken(email) {
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
@@ -35,7 +35,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 5050;
-const DB_PATH = path.join(__dirname, 'data', 'kyros_portfolio.db');
+const DB_PATH = path.join(__dirname, 'data', 'writerify_portfolio.db');
+// Auto-migrate from legacy db file if it exists
+if (!fs.existsSync(DB_PATH) && fs.existsSync(path.join(__dirname, 'data', 'kyros_portfolio.db'))) {
+  try {
+    fs.copyFileSync(path.join(__dirname, 'data', 'kyros_portfolio.db'), DB_PATH);
+  } catch (e) {
+    console.error('Failed to copy legacy db:', e);
+  }
+}
 const BACKUPS_DIR = path.join(__dirname, 'data', 'backups');
 
 if (!fs.existsSync(path.dirname(DB_PATH))) {
@@ -777,7 +785,7 @@ const server = http.createServer(async (req, res) => {
 
         res.writeHead(200, {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="kyros_portfolio_${monthKey}.csv"`
+          'Content-Disposition': `attachment; filename="writerify_portfolio_${monthKey}.csv"`
         });
         return res.end(csv);
       } else {
@@ -795,7 +803,7 @@ const server = http.createServer(async (req, res) => {
 
         res.writeHead(200, {
           'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="kyros_expenses_ledger.csv"`
+          'Content-Disposition': `attachment; filename="writerify_expenses_ledger.csv"`
         });
         return res.end(csv);
       }
@@ -809,8 +817,8 @@ const server = http.createServer(async (req, res) => {
       const settings = db.prepare('SELECT * FROM settings').all();
 
       const dump = {
-        app: 'KYROS Portfolio Command Center',
-        version: '1.0.0',
+        app: 'Writerify Finance Command Center',
+        version: '2.0.0',
         exported_at: new Date().toISOString(),
         settings,
         sites,
@@ -820,7 +828,7 @@ const server = http.createServer(async (req, res) => {
 
       res.writeHead(200, {
         'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': `attachment; filename="kyros_portfolio_full_backup_${Date.now()}.json"`
+        'Content-Disposition': `attachment; filename="writerify_finance_full_backup_${Date.now()}.json"`
       });
       return res.end(JSON.stringify(dump, null, 2));
     }
@@ -926,7 +934,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`========================================================`);
-  console.log(`👑 KYROS PORTFOLIO & REVENUE COMMAND CENTER`);
+  console.log(`👑 WRITERIFY PORTFOLIO & REVENUE COMMAND CENTER`);
   console.log(`🚀 Live URL: http://localhost:${PORT}`);
   console.log(`💾 Database: ${DB_PATH} (SQLite WAL Mode Active)`);
   console.log(`🛡️ Auto-Backups: ${BACKUPS_DIR}`);

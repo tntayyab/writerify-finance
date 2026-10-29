@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KYROS Portfolio & Revenue Command Center</title>
-  <link rel="stylesheet" href="styles.css?v=1.6">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Writerify Portfolio & Revenue Command Center</title>
+  <link rel="stylesheet" href="styles.css?v=2.2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,8 +17,8 @@
   <div id="loginScreen" class="login-wrapper">
     <div class="login-card">
       <div class="login-logo-glow">👑</div>
-      <h2 class="login-title">Writerify & KYROS</h2>
-      <p class="login-subtitle">Finance & Portfolio Command Center<br><span class="text-xs text-brand-400 font-mono">Restricted Access • Authorized Admin Only</span></p>
+      <h2 class="login-title">Writerify Finance</h2>
+      <p class="login-subtitle">Portfolio & Revenue Command Center<br><span class="text-xs text-brand-400 font-mono">Restricted Access • Authorized Admin Only</span></p>
 
       <div id="loginError" class="login-error hidden">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -30,7 +30,7 @@
           <label class="login-label" for="loginEmail">Admin Email</label>
           <div class="login-input-wrapper">
             <svg class="login-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"/></svg>
-            <input type="email" id="loginEmail" class="login-input" placeholder="itsinjamul@gmail.com" required autocomplete="username">
+            <input type="email" id="loginEmail" class="login-input" value="itsinjamul@gmail.com" required autocomplete="username">
           </div>
         </div>
 
@@ -38,7 +38,7 @@
           <label class="login-label" for="loginPassword">Password</label>
           <div class="login-input-wrapper">
             <svg class="login-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-            <input type="password" id="loginPassword" class="login-input" placeholder="••••••••••••" required autocomplete="current-password">
+            <input type="password" id="loginPassword" class="login-input" placeholder="Enter Password" required autocomplete="current-password" autofocus>
             <button type="button" id="togglePasswordBtn" class="login-password-toggle" title="Show / Hide Password">
               <svg id="eyeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
             </button>
@@ -49,106 +49,168 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
           <span id="loginBtnText">Authenticate & Enter</span>
         </button>
+
+        <div class="mt-3 text-center">
+          <button type="button" id="quickFillBtn" class="text-xs text-brand-400 hover:text-brand-300 transition underline cursor-pointer bg-transparent border-0 p-1">
+            ⚡ Quick Auto-Fill Password
+          </button>
+        </div>
       </form>
 
       <div class="login-footer-badge">
-        <span>🔒</span> End-to-End Encrypted Session
+        <span>🔒</span> 256-Bit Encrypted Session
       </div>
     </div>
   </div>
 
   <!-- PROTECTED APPLICATION CONTAINER (Hidden until authenticated) -->
   <div id="appContainer" style="display: none;">
+    <!-- Mobile Sidebar Backdrop -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
 
-  <!-- Header -->
-  <header class="border-b border-border bg-card/80 backdrop-blur sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 font-bold text-lg text-white">
-        👑
-      </div>
-      <div>
-        <div class="flex items-center gap-2">
-          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
-            KYROS <span class="text-brand-400 font-extrabold">MISSION CONTROL</span>
-          </h1>
-          <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20">
-            PORTFOLIO HUB
-          </span>
+    <div class="app-layout">
+      <!-- SIDEBAR (Fixed Desktop, Slide-over Drawer on Mobile) -->
+      <aside id="appSidebar" class="app-sidebar">
+        <!-- Sidebar Brand -->
+        <div class="sidebar-brand">
+          <div class="sidebar-logo">👑</div>
+          <div class="sidebar-brand-text">
+            <h2>WRITERIFY</h2>
+            <span>FINANCE COMMAND</span>
+          </div>
+          <!-- Close button on mobile -->
+          <button id="closeSidebarBtn" class="sidebar-close-btn lg:hidden" aria-label="Close Sidebar">✕</button>
         </div>
-        <p class="text-xs text-slate-400">Master Portfolio, Ads & Amazon Revenue Command Center • Boss TN TAYYAB</p>
-      </div>
-    </div>
 
-    <!-- Center Month Navigator -->
-    <div class="flex items-center gap-2 bg-card-alt px-3 py-1.5 rounded-xl border border-border shadow-inner">
-      <button id="prevMonthBtn" class="btn-icon" title="Previous Month">◀</button>
-      <div class="flex items-center gap-1.5 px-2">
-        <span class="text-xs text-slate-400">Active Month:</span>
-        <span id="activeMonthDisplay" class="font-bold text-sm text-brand-300 font-mono">Oct 2026</span>
-      </div>
-      <button id="nextMonthBtn" class="btn-icon" title="Next Month">▶</button>
-      <button id="currentMonthBtn" class="px-2 py-1 rounded-md text-[11px] font-semibold bg-brand-600/20 text-brand-400 hover:bg-brand-600/30 transition border border-brand-500/30">
-        Today
-      </button>
-    </div>
-
-    <!-- Right Controls -->
-    <div class="flex items-center gap-2.5">
-      <!-- Theme Switcher (Light / Dark / System) -->
-      <div class="theme-switcher">
-        <button type="button" class="theme-btn" data-theme="light" title="Light Theme">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-          <span class="hidden sm:inline">Light</span>
-        </button>
-        <button type="button" class="theme-btn active" data-theme="dark" title="Dark Theme">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-          <span class="hidden sm:inline">Dark</span>
-        </button>
-        <button type="button" class="theme-btn" data-theme="system" title="System Theme">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-          <span class="hidden sm:inline">System</span>
-        </button>
-      </div>
-
-      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        PostgreSQL Cloud Live
-      </div>
-
-      <button id="exportCsvBtn" class="btn-secondary text-xs" title="Export CSV for Excel">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-        Export CSV
-      </button>
-
-      <button id="backupBtn" class="btn-secondary text-xs" title="Download Full JSON Database Backup">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-        Backup DB
-      </button>
-
-      <button id="openRestoreBtn" class="btn-secondary text-xs" title="Restore Database Snapshot">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        Restore
-      </button>
-
-      <!-- Admin Profile & Logout -->
-      <div class="flex items-center gap-2 pl-3 ml-1 border-l border-border">
-        <div class="w-7 h-7 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/30">
-          👑
+        <!-- Month Navigator in Sidebar -->
+        <div class="sidebar-month-widget">
+          <div class="sidebar-month-header">
+            <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Month</span>
+            <button id="currentMonthBtn" class="sidebar-today-pill">Today</button>
+          </div>
+          <div class="sidebar-month-controls">
+            <button id="prevMonthBtn" class="sidebar-month-nav" title="Previous Month">◀</button>
+            <span id="activeMonthDisplay" class="sidebar-month-label">Oct 2026</span>
+            <button id="nextMonthBtn" class="sidebar-month-nav" title="Next Month">▶</button>
+          </div>
         </div>
-        <div class="hidden xl:block text-left text-xs leading-tight">
-          <div class="font-bold text-white text-[11px]">itsinjamul@gmail.com</div>
-          <div class="text-[10px] text-emerald-400 font-mono">● Admin Authorized</div>
-        </div>
-        <button id="logoutBtn" class="btn-secondary text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border-rose-500/20" title="Sign Out">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-          <span class="hidden sm:inline">Logout</span>
-        </button>
-      </div>
-    </div>
-  </header>
 
-  <!-- Main Container -->
-  <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        <!-- Sidebar Navigation Menu -->
+        <nav class="sidebar-nav">
+          <a href="#missionSection" class="sidebar-nav-item active" data-nav="mission">
+            <span class="sidebar-nav-icon">📊</span>
+            <span>Mission Control</span>
+          </a>
+          <a href="#sitesSection" class="sidebar-nav-item" data-nav="sites">
+            <span class="sidebar-nav-icon">🌐</span>
+            <span>Websites Portfolio</span>
+            <span class="sidebar-nav-badge" id="sidebarSiteCount">39</span>
+          </a>
+          <a href="#financialsSection" class="sidebar-nav-item" data-nav="financials">
+            <span class="sidebar-nav-icon">💰</span>
+            <span>Financial KPIs</span>
+          </a>
+          <a href="#expensesSection" class="sidebar-nav-item" data-nav="expenses">
+            <span class="sidebar-nav-icon">🧾</span>
+            <span>Expenses Ledger</span>
+          </a>
+        </nav>
+
+        <!-- Sidebar Tools Section -->
+        <div class="sidebar-actions-section">
+          <div class="sidebar-section-title">DATA EXPORTS & BACKUP</div>
+          <button id="exportCsvBtn" class="sidebar-action-btn" title="Export CSV for Excel">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Export Sites CSV</span>
+          </button>
+          <button id="backupBtn" class="sidebar-action-btn" title="Download Full JSON Database Backup">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            <span>Backup JSON Database</span>
+          </button>
+          <button id="openRestoreBtn" class="sidebar-action-btn" title="Restore Database Snapshot">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>Restore Backup</span>
+          </button>
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+          <!-- Database Live Status -->
+          <div class="sidebar-status-pill">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>PostgreSQL Cloud Live</span>
+          </div>
+
+          <!-- Theme Switcher -->
+          <div class="theme-switcher w-full">
+            <button type="button" class="theme-btn flex-1" data-theme="light" title="Light Theme">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+              <span>Light</span>
+            </button>
+            <button type="button" class="theme-btn active flex-1" data-theme="dark" title="Dark Theme">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+              <span>Dark</span>
+            </button>
+            <button type="button" class="theme-btn flex-1" data-theme="system" title="System Theme">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <span>System</span>
+            </button>
+          </div>
+
+          <!-- Admin Profile Card & Logout -->
+          <div class="sidebar-user-card">
+            <div class="sidebar-user-avatar">IH</div>
+            <div class="sidebar-user-info">
+              <div class="sidebar-user-name">Injamul Haque</div>
+              <div class="sidebar-user-email">itsinjamul@gmail.com</div>
+            </div>
+            <button id="logoutBtn" class="sidebar-logout-btn" title="Sign Out">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- MAIN WRAPPER -->
+      <div class="app-main-wrapper">
+        <!-- Top Navbar (Mobile / Tablet Bar & Quick Actions) -->
+        <header class="app-topbar">
+          <div class="flex items-center gap-3">
+            <button id="toggleSidebarBtn" class="topbar-menu-btn lg:hidden" aria-label="Open Sidebar Menu">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center font-bold text-sm text-white shadow-md shadow-brand-500/20">
+                👑
+              </div>
+              <div>
+                <h1 class="text-sm sm:text-base font-extrabold text-white tracking-tight flex items-center gap-1.5 leading-tight">
+                  WRITERIFY <span class="text-brand-400 font-extrabold">FINANCE</span>
+                </h1>
+                <p class="hidden sm:block text-[11px] text-slate-400 leading-tight">Portfolio & Revenue Command Center • Boss TN TAYYAB</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Mobile Month Pill -->
+            <div class="topbar-month-pill lg:hidden">
+              <span id="topbarMonthDisplay" class="font-bold text-xs text-brand-300 font-mono">Oct 2026</span>
+            </div>
+
+            <!-- Quick Add Site Button -->
+            <button id="topbarAddSiteBtn" class="btn-primary text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg shadow-sm">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              <span class="hidden sm:inline">Add Site</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="app-content-body max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-6">
+
+          <!-- Section 1: Mission Control -->
+          <section id="missionSection" class="space-y-6">
 
     <!-- Mission Header & Gauges Card -->
     <div class="card p-6 border-brand-500/30 bg-gradient-to-br from-card to-card-alt relative overflow-hidden shadow-2xl">
@@ -717,7 +779,7 @@
       </div>
       <div class="mt-4 space-y-4 text-xs">
         <p class="text-slate-300">
-          Upload a previously exported <code class="font-mono text-brand-300">kyros_portfolio_full_backup_*.json</code> file to restore your entire database.
+          Upload a previously exported <code class="font-mono text-brand-300">writerify_finance_full_backup_*.json</code> file to restore your entire database.
         </p>
         <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200">
           ⚠️ Note: A safety backup of your current database will be automatically created before restoration.
@@ -731,8 +793,11 @@
     </div>
   </div>
 
+  </main> <!-- /.app-content-body -->
+  </div> <!-- /.app-main-wrapper -->
+  </div> <!-- /.app-layout -->
   </div> <!-- /#appContainer -->
 
-  <script src="app.js?v=2.0"></script>
+  <script src="app.js?v=2.2"></script>
 </body>
 </html>

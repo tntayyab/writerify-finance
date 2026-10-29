@@ -7,7 +7,7 @@ const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd
 
 const ADMIN_EMAIL = 'itsinjamul@gmail.com';
 const ADMIN_PASSWORD = 'Writerify@50463#';
-const AUTH_SECRET = 'KYROS_SECURE_AUTH_KEY_2026_WRITERIFY_50463';
+const AUTH_SECRET = 'WRITERIFY_SECURE_AUTH_KEY_2026_50463';
 
 async function createToken(email) {
   const exp = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days session
@@ -624,7 +624,7 @@ export async function onRequest(context) {
           csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
         });
 
-        return textResponse(csv, 200, 'text/csv', `kyros_sites_${monthKey}.csv`);
+        return textResponse(csv, 200, 'text/csv', `writerify_sites_${monthKey}.csv`);
       }
 
       if (type === 'expenses') {
@@ -633,7 +633,7 @@ export async function onRequest(context) {
         (expenses || []).forEach(e => {
           csv += `"${e.id}","${e.expense_date}","${e.month_key}","${e.site_id || ''}","${e.category}","${(e.title || '').replace(/"/g, '""')}",${(parseFloat(e.amount) || 0).toFixed(2)},"${e.receipt_url || ''}"\n`;
         });
-        return textResponse(csv, 200, 'text/csv', 'kyros_expenses_ledger.csv');
+        return textResponse(csv, 200, 'text/csv', 'writerify_expenses_ledger.csv');
       }
     }
 
@@ -654,7 +654,7 @@ export async function onRequest(context) {
         expenses: expenses || []
       };
 
-      return textResponse(JSON.stringify(backup, null, 2), 200, 'application/json', `kyros_portfolio_full_backup_${Date.now()}.json`);
+      return textResponse(JSON.stringify(backup, null, 2), 200, 'application/json', `writerify_finance_full_backup_${Date.now()}.json`);
     }
 
     return jsonResponse({ success: false, error: `Endpoint ${pathname} not found` }, 404);
