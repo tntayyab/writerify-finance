@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Writerify Portfolio & Revenue Command Center</title>
-  <link rel="stylesheet" href="styles.css?v=2.4">
+  <link rel="stylesheet" href="styles.css?v=2.5">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -104,7 +104,7 @@
           <a href="#sitesSection" class="sidebar-nav-item" data-nav="sites">
             <span class="sidebar-nav-icon">🌐</span>
             <span>Websites Portfolio</span>
-            <span class="sidebar-nav-badge" id="sidebarSiteCount">39</span>
+            <span class="sidebar-nav-badge" id="sidebarSiteCount">0</span>
           </a>
           <a href="#financialsSection" class="sidebar-nav-item" data-nav="financials">
             <span class="sidebar-nav-icon">💰</span>
@@ -264,7 +264,7 @@
             <div>
               <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Portfolio Goal</div>
               <div class="text-base font-bold text-white flex items-baseline gap-1 mt-0.5">
-                <span id="portfolioGaugeCurrent" class="text-lg font-mono text-cyan-400">39 running</span>
+                <span id="portfolioGaugeCurrent" class="text-lg font-mono text-cyan-400">0 running</span>
                 <span id="portfolioGaugeTarget" class="text-xs text-slate-400 font-mono">of 500 sites</span>
               </div>
               <div id="portfolioGaugeDelta" class="text-xs font-semibold text-cyan-300 mt-0.5 font-mono">461 sites to go</div>
@@ -442,7 +442,7 @@
     <div class="flex flex-wrap items-center gap-3">
       <button class="status-badge active" data-status="running">
         <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-        <span id="badgeRunningCount" class="font-mono font-bold">39</span>
+        <span id="badgeRunningCount" class="font-mono font-bold">0</span>
         <span>RUNNING</span>
       </button>
       <button class="status-badge" data-status="penalty">
@@ -462,7 +462,7 @@
       </button>
       <button class="status-badge" data-status="all">
         <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
-        <span id="badgeAllCount" class="font-mono font-bold">39</span>
+        <span id="badgeAllCount" class="font-mono font-bold">0</span>
         <span>ALL SITES</span>
       </button>
     </div>
@@ -474,7 +474,7 @@
         <div class="flex items-center gap-2">
           <span class="text-sm font-bold text-white flex items-center gap-1.5">
             <span>Sites</span>
-            <span id="sitesHeaderCount" class="text-xs font-mono px-2 py-0.5 rounded-md bg-dark border border-border text-slate-300">39</span>
+            <span id="sitesHeaderCount" class="text-xs font-mono px-2 py-0.5 rounded-md bg-dark border border-border text-slate-300">0</span>
           </span>
           <span class="text-xs text-slate-400">• Click any value to inline edit & auto-save</span>
         </div>
@@ -515,7 +515,7 @@
 
       <!-- Table Footer / Pagination -->
       <div class="p-3 border-t border-border bg-dark/40 flex items-center justify-between text-xs text-slate-400">
-        <div id="tablePaginationInfo">Showing 1-39 of 39 sites</div>
+        <div id="tablePaginationInfo">0 sites found</div>
         <div class="flex items-center gap-2">
           <button id="tablePrevPageBtn" class="btn-icon" disabled>◀</button>
           <span id="tablePageNumber" class="font-mono text-white font-bold px-2">1</span>
@@ -798,6 +798,6 @@
   </div> <!-- /.app-layout -->
   </div> <!-- /#appContainer -->
 
-  <script src="app.js?v=2.4"></script>
+  <script src="app.js?v=2.5"></script>
 </body>
 </html>
