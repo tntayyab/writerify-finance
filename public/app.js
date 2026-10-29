@@ -11,6 +11,7 @@
     expenses: [],
     activeStatusFilter: 'running',
     searchQuery: '',
+    sortBy: 'income_desc', // Default: income wise always
     ledgerRange: 'thisMonth',
     page: 1,
     pageSize: 25,
@@ -121,13 +122,27 @@
       }
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error ${res.status}`);
+        let msg = `HTTP error ${res.status}`;
+        try {
+          const errorData = await res.json();
+          if (errorData && (errorData.error || errorData.message)) {
+            msg = errorData.error || errorData.message;
+          }
+        } catch (_) {}
+        if (msg.includes('23505') || msg.includes('unique constraint') || msg.includes('sites_site_url_key') || msg.includes('Duplicate URL')) {
+          msg = '⚠️ This website URL is already added to your portfolio! (Duplicate URL)';
+        }
+        showToast(msg, 'error');
+        return { success: false, error: msg };
       }
       return await res.json();
     } catch (err) {
+      if (err.message && (err.message.includes('23505') || err.message.includes('unique constraint') || err.message.includes('sites_site_url_key') || err.message.includes('Duplicate URL'))) {
+        showToast('⚠️ This website URL is already added to your portfolio! (Duplicate URL)', 'error');
+        return { success: false, error: 'Duplicate URL' };
+      }
       showToast(err.message, 'error');
-      throw err;
+      return { success: false, error: err.message };
     }
   }
 
@@ -249,24 +264,6 @@
   const newSiteHosting = document.getElementById('newSiteHosting');
   const newSiteHostingOther = document.getElementById('newSiteHostingOther');
   const newSiteDomainExpiry = document.getElementById('newSiteDomainExpiry');
-
-  function setupOtherToggle(selectEl, otherInputEl) {
-    if (!selectEl || !otherInputEl) return;
-    selectEl.addEventListener('change', () => {
-      if (selectEl.value === 'other') {
-        otherInputEl.classList.remove('hidden');
-        otherInputEl.focus();
-      } else {
-        otherInputEl.classList.add('hidden');
-        otherInputEl.value = '';
-      }
-    });
-  }
-
-  setupOtherToggle(newSiteRegistrar, newSiteRegistrarOther);
-  setupOtherToggle(newSiteHosting, newSiteHostingOther);
-  setupOtherToggle(editSiteRegistrar, editSiteRegistrarOther);
-  setupOtherToggle(editSiteHosting, editSiteHostingOther);
 
   // Theme Engine (Light, Dark, System)
   function applyTheme(themeChoice) {
@@ -684,14 +681,41 @@
   function renderSitesTable() {
     sitesHeaderCount.textContent = state.sites.length;
     
+    // Sort sites according to state.sortBy (Default: Income Wise High -> Low)
+    let sortedSites = [...state.sites];
+    if (state.sortBy === 'expiry_asc') {
+      // Expiry wise: urgent/soonest expiring first (or expired), then upcoming, then sites with no expiry at the bottom
+      sortedSites.sort((a, b) => {
+        const getExpiryTime = (site) => {
+          if (!site.domain_expiry || !String(site.domain_expiry).trim()) return Infinity;
+          const parts = String(site.domain_expiry).trim().split('-');
+          if (parts.length !== 3) return Infinity;
+          return new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))).getTime();
+        };
+        const timeA = getExpiryTime(a);
+        const timeB = getExpiryTime(b);
+        if (timeA === timeB) {
+          return (b.total_income || 0) - (a.total_income || 0);
+        }
+        return timeA - timeB;
+      });
+    } else if (state.sortBy === 'income_asc') {
+      sortedSites.sort((a, b) => ((a.total_income || 0) - (b.total_income || 0)) || (a.id - b.id));
+    } else if (state.sortBy === 'name_asc') {
+      sortedSites.sort((a, b) => (a.site_name || a.site_url || '').localeCompare(b.site_name || b.site_url || ''));
+    } else {
+      // Default: income_desc (High -> Low)
+      sortedSites.sort((a, b) => ((b.total_income || 0) - (a.total_income || 0)) || (a.id - b.id));
+    }
+
     // Pagination
-    const total = state.sites.length;
+    const total = sortedSites.length;
     const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
     state.page = Math.min(state.page, totalPages);
 
     const startIdx = (state.page - 1) * state.pageSize;
     const endIdx = Math.min(startIdx + state.pageSize, total);
-    const pageSites = state.sites.slice(startIdx, endIdx);
+    const pageSites = sortedSites.slice(startIdx, endIdx);
 
     tablePaginationInfo.textContent = total > 0 ? `Showing ${startIdx + 1}-${endIdx} of ${total} sites` : '0 sites found';
     tablePageNumber.textContent = state.page;
@@ -702,7 +726,7 @@
       if (total === 0) {
         sitesTableBody.innerHTML = `
           <tr>
-            <td colspan="8" class="text-center py-12 px-4 text-slate-400">
+            <td colspan="9" class="text-center py-12 px-4 text-slate-400">
               <div class="flex flex-col items-center justify-center gap-2.5 max-w-xs mx-auto">
                 <div class="w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-2xl shadow-inner">
                   🌐
@@ -725,7 +749,7 @@
       } else {
         sitesTableBody.innerHTML = `
           <tr>
-            <td colspan="8" class="text-center py-10 text-slate-400 italic">
+            <td colspan="9" class="text-center py-10 text-slate-400 italic">
               No websites match your filter or search criteria.
             </td>
           </tr>
@@ -748,7 +772,7 @@
       };
 
       // Domain expiry calculation
-      let expiryBadge = '<span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-mono">📅 No expiry set</span>';
+      let expiryBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-dark/70 border border-border text-[10px] text-slate-500 font-mono"><span>📅</span><span>No expiry set</span></span>';
       let isUrgentExpiry = false;
 
       if (site.domain_expiry && String(site.domain_expiry).trim()) {
@@ -765,80 +789,92 @@
 
           if (diffDays <= 0) {
             isUrgentExpiry = true;
-            expiryBadge = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-sm animate-pulse" title="Domain expired on ${dateStr}">
+            expiryBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-sm animate-pulse" title="Domain expired on ${dateStr}">
               <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
               <span>⚠️ Expired (${dateStr})</span>
             </span>`;
           } else if (diffDays <= 30) {
             isUrgentExpiry = true;
-            expiryBadge = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm" title="Expiring soon: ${diffDays} days left (${dateStr})">
+            expiryBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm" title="Expiring soon: ${diffDays} days left (${dateStr})">
               <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
               <span>⚠️ ${diffDays}d left (${dateStr})</span>
             </span>`;
           } else {
-            expiryBadge = `<span class="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono" title="${diffDays} days remaining">
+            expiryBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-dark/70 border border-border text-[11px] text-slate-300 font-mono" title="${diffDays} days remaining">
               <span>📅</span>
               <span>${dateStr} (${diffDays}d)</span>
             </span>`;
           }
         } else {
-          expiryBadge = `<span class="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono">📅 ${dateStr}</span>`;
+          expiryBadge = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-dark/70 border border-border text-[11px] text-slate-300 font-mono"><span>📅</span><span>${dateStr}</span></span>`;
         }
       }
 
       rowsHtml += `
-        <tr class="hover:bg-card-alt/50 transition-colors group" data-site-id="${site.id}">
-          <td class="py-2.5 px-3 text-center font-mono text-slate-400">${rowIndex}</td>
-          <td class="py-2.5 px-4">
-            <a href="${site.site_url}" target="_blank" class="font-bold text-white hover:text-brand-400 transition inline-flex items-center gap-1 text-xs tracking-tight" title="${site.site_url}">
-              <span>${site.site_name || site.site_url}</span>
-              <span class="text-[10px] text-slate-500 hover:text-brand-400 transition">↗</span>
+        <tr class="hover:bg-card-alt/50 transition-colors group ${isUrgentExpiry ? 'bg-rose-950/15' : ''}" data-site-id="${site.id}">
+          <td class="py-2.5 px-3 text-center font-mono text-slate-400 shrink-0">${rowIndex}</td>
+          <td class="py-2.5 px-4 w-56 min-w-[170px] max-w-[220px]">
+            <a href="${site.site_url}" target="_blank" class="font-bold text-white hover:text-brand-400 transition inline-flex items-center gap-1 text-xs tracking-tight truncate max-w-full" title="${site.site_url}">
+              <span class="truncate">${site.site_name || site.site_url}</span>
+              <span class="text-[10px] text-slate-500 hover:text-brand-400 transition shrink-0">↗</span>
             </a>
-            <div class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 font-medium">
-              <span class="text-slate-500">👤</span>
-              <span class="site-username-display">${site.username || '<span class="text-slate-600">No author</span>'}</span>
+            <div class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 font-medium truncate">
+              <span class="text-slate-500 shrink-0">👤</span>
+              <span class="site-username-display truncate">${site.username || '<span class="text-slate-600">No author</span>'}</span>
             </div>
           </td>
-          <td class="py-2.5 px-3">
-            <select class="site-status-select px-2.5 py-1 rounded-md text-[11px] font-semibold border ${statusColors[site.status] || statusColors.running} bg-transparent outline-none cursor-pointer" data-id="${site.id}">
+          <td class="py-2.5 px-3 w-28 min-w-[100px] text-center">
+            <select class="site-status-select px-2 py-1 rounded-md text-[11px] font-semibold border ${statusColors[site.status] || statusColors.running} bg-transparent outline-none cursor-pointer text-center" data-id="${site.id}">
               <option value="running" ${site.status === 'running' ? 'selected' : ''}>Running</option>
               <option value="penalty" ${site.status === 'penalty' ? 'selected' : ''}>Penalty</option>
               <option value="deleted" ${site.status === 'deleted' ? 'selected' : ''}>Deleted</option>
               <option value="sold" ${site.status === 'sold' ? 'selected' : ''}>Sold</option>
             </select>
           </td>
-          <td class="py-2.5 px-4">
-            <div class="flex flex-col gap-1 min-w-[165px] ${isUrgentExpiry ? 'p-1.5 rounded-md bg-rose-950/40 border border-rose-500/50' : ''}">
-              <div class="flex items-center gap-1.5 text-[11px] text-slate-200 font-medium truncate" title="Domain Registrar: ${site.domain_registrar || 'Not set'}">
-                <span class="text-slate-400 text-xs shrink-0">🌐</span>
-                <span class="truncate">${site.domain_registrar || '<span class="text-slate-500 italic">No registrar</span>'}</span>
+          <td class="py-2.5 px-4 min-w-[250px]">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-dark/70 border border-border text-[11px] text-slate-200 font-medium" title="Domain Registrar: ${site.domain_registrar || 'Not set'}">
+                <span class="text-xs">🌐</span>
+                <span class="truncate max-w-[100px]">${site.domain_registrar || '<span class="text-slate-500 italic">No registrar</span>'}</span>
               </div>
-              <div class="flex items-center gap-1.5 text-[10px] text-slate-400 truncate" title="Hosting Provider: ${site.hosting_provider || 'Not set'}">
-                <span class="text-slate-500 text-xs shrink-0">🖥️</span>
-                <span class="truncate">${site.hosting_provider || '<span class="text-slate-500 italic">No hosting</span>'}</span>
+              <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-dark/70 border border-border text-[11px] text-slate-300 font-medium" title="Hosting Provider: ${site.hosting_provider || 'Not set'}">
+                <span class="text-xs">🖥️</span>
+                <span class="truncate max-w-[110px]">${site.hosting_provider || '<span class="text-slate-500 italic">No hosting</span>'}</span>
               </div>
-              <div class="mt-0.5">
+              <div class="inline-flex items-center">
                 ${expiryBadge}
               </div>
             </div>
           </td>
-          <td class="py-2.5 px-3 text-right">
+          <td class="py-2.5 px-3 min-w-[200px]">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-dark/70 border border-amber-500/30 text-[11px] text-amber-300 font-mono font-medium" title="Amazon Tracking ID: ${site.amazon_tracking_id || 'Not set'}">
+                <span class="text-xs">🏷️</span>
+                <span class="truncate max-w-[100px]">${site.amazon_tracking_id || '<span class="text-slate-500 italic">No tag</span>'}</span>
+              </div>
+              <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-dark/70 border border-border text-[11px] text-slate-300 font-medium" title="Amazon Account: ${site.amazon_account || 'Not set'}">
+                <span class="text-xs">📦</span>
+                <span class="truncate max-w-[100px]">${site.amazon_account || '<span class="text-slate-500 italic">No acc</span>'}</span>
+              </div>
+            </div>
+          </td>
+          <td class="py-2.5 px-3 text-right w-24 min-w-[80px]">
             <input type="number" step="0.01" class="table-input metric-input text-cyan-400 font-bold" data-field="ads_income" data-id="${site.id}" value="${site.ads_income || 0}">
           </td>
-          <td class="py-2.5 px-3 text-right">
+          <td class="py-2.5 px-3 text-right w-24 min-w-[80px]">
             <input type="number" step="0.01" class="table-input metric-input text-amber-400 font-bold" data-field="amazon_income" data-id="${site.id}" value="${site.amazon_income || 0}">
           </td>
-          <td class="py-2.5 px-3 text-right font-mono font-bold text-white">
+          <td class="py-2.5 px-3 text-right font-mono font-bold text-white w-28 min-w-[90px]">
             ${formatMoney(site.total_income)}
           </td>
-          <td class="py-2.5 px-3 text-center">
+          <td class="py-2.5 px-3 text-center w-14 shrink-0">
             <div class="action-dropdown-container">
               <button type="button" class="action-menu-btn" data-id="${site.id}" title="Actions">
                 <svg class="w-4 h-4 pointer-events-none" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
                 </svg>
               </button>
-              <div class="action-dropdown-menu hidden ${isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}" data-menu-id="${site.id}">
+              <div class="action-dropdown-menu hidden ${isNearBottom ? 'bottom-full mb-1.5 open-up' : 'top-full mt-1.5 open-down'}" data-menu-id="${site.id}">
                 <button type="button" class="dropdown-item edit-site-opt" data-id="${site.id}">
                   <span class="text-sm">✏️</span>
                   <span>Edit Site</span>
@@ -911,6 +947,23 @@
 
         if (menu) {
           const willOpen = menu.classList.contains('hidden');
+          if (willOpen) {
+            // Check position relative to table container and window viewport
+            const btnRect = btn.getBoundingClientRect();
+            const container = document.querySelector('.sites-table-container');
+            const containerRect = container ? container.getBoundingClientRect() : null;
+            const spaceBelowContainer = containerRect ? (containerRect.bottom - btnRect.bottom) : 999;
+            const spaceBelowWindow = window.innerHeight - btnRect.bottom;
+
+            // If less than 180px below button in container or window, flip upward!
+            if (spaceBelowContainer < 180 || spaceBelowWindow < 190) {
+              menu.classList.remove('top-full', 'mt-1.5', 'open-down');
+              menu.classList.add('bottom-full', 'mb-1.5', 'open-up');
+            } else {
+              menu.classList.remove('bottom-full', 'mb-1.5', 'open-up');
+              menu.classList.add('top-full', 'mt-1.5', 'open-down');
+            }
+          }
           menu.classList.toggle('hidden', !willOpen);
           btn.classList.toggle('active', willOpen);
         }
@@ -984,6 +1037,12 @@
         }
 
         if (editSiteDomainExpiry) editSiteDomainExpiry.value = site.domain_expiry || '';
+
+        const editSiteAmazonTrackingId = document.getElementById('editSiteAmazonTrackingId');
+        const editSiteAmazonAccount = document.getElementById('editSiteAmazonAccount');
+        if (editSiteAmazonTrackingId) editSiteAmazonTrackingId.value = site.amazon_tracking_id || '';
+        if (editSiteAmazonAccount) editSiteAmazonAccount.value = site.amazon_account || '';
+
         editSiteModal.classList.remove('hidden');
       });
     });
@@ -1251,23 +1310,60 @@
       });
     }
 
-    // Sidebar Navigation Links Smooth Scroll
+    // Section Switching Engine (Mission Control, Websites Portfolio, Financial KPIs, Expenses Ledger)
+    function switchSection(sectionName) {
+      const validSections = ['mission', 'sites', 'financials', 'expenses'];
+      if (!validSections.includes(sectionName)) sectionName = 'mission';
+
+      state.activeSection = sectionName;
+      try { localStorage.setItem('writerify_active_section', sectionName); } catch (_) {}
+
+      // Update sidebar active link
+      document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+        const nav = item.getAttribute('data-nav');
+        if (nav === sectionName) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+
+      // Update section visibility
+      document.querySelectorAll('.content-section').forEach(sec => {
+        if (sec.getAttribute('data-section') === sectionName) {
+          sec.classList.remove('hidden');
+        } else {
+          sec.classList.add('hidden');
+        }
+      });
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    window.switchSection = switchSection;
+
+    // Sidebar Navigation Links
     document.querySelectorAll('.sidebar-nav-item').forEach(item => {
       item.addEventListener('click', (e) => {
-        const targetId = item.getAttribute('href');
-        if (targetId && targetId.startsWith('#')) {
+        const nav = item.getAttribute('data-nav');
+        if (nav) {
           e.preventDefault();
-          document.querySelectorAll('.sidebar-nav-item').forEach(n => n.classList.remove('active'));
-          item.classList.add('active');
+          switchSection(nav);
           if (isMobileView()) {
             closeSidebar();
           }
-          const targetElem = document.querySelector(targetId);
-          if (targetElem) {
-            targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
         }
       });
+    });
+
+    // Check initial section preference
+    const initialNav = (window.location.hash || '').replace('#', '').replace('Section', '');
+    const savedNav = localStorage.getItem('writerify_active_section') || 'mission';
+    switchSection(initialNav || savedNav);
+
+    window.addEventListener('hashchange', () => {
+      const hashNav = (window.location.hash || '').replace('#', '').replace('Section', '');
+      if (hashNav) switchSection(hashNav);
     });
 
     // Check desktop saved preference on initialization
@@ -1324,6 +1420,17 @@
         loadSites();
       }, 250);
     });
+
+    // Sort / Filter Selector (Default: Income Wise High -> Low, Expiry Wise Urgent First)
+    const siteSortFilter = document.getElementById('siteSortFilter');
+    if (siteSortFilter) {
+      siteSortFilter.value = state.sortBy || 'income_desc';
+      siteSortFilter.addEventListener('change', (e) => {
+        state.sortBy = e.target.value;
+        state.page = 1;
+        renderSitesTable();
+      });
+    }
 
     // Pagination
     tablePrevPageBtn.addEventListener('click', () => {
@@ -1415,6 +1522,27 @@
       }
     });
 
+    // Dropdown toggle for custom 'other' input
+    function setupOtherToggle(selectEl, otherInputEl) {
+      if (!selectEl || !otherInputEl) return;
+      const update = () => {
+        if (selectEl.value === 'other') {
+          otherInputEl.classList.remove('hidden');
+          otherInputEl.focus();
+        } else {
+          otherInputEl.classList.add('hidden');
+          otherInputEl.value = '';
+        }
+      };
+      selectEl.addEventListener('change', update);
+      selectEl.addEventListener('input', update);
+    }
+
+    setupOtherToggle(document.getElementById('newSiteRegistrar'), document.getElementById('newSiteRegistrarOther'));
+    setupOtherToggle(document.getElementById('newSiteHosting'), document.getElementById('newSiteHostingOther'));
+    setupOtherToggle(document.getElementById('editSiteRegistrar'), document.getElementById('editSiteRegistrarOther'));
+    setupOtherToggle(document.getElementById('editSiteHosting'), document.getElementById('editSiteHostingOther'));
+
     // Add Site Form Submit
     addSiteForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1434,10 +1562,12 @@
       }
 
       const domain_expiry = (document.getElementById('newSiteDomainExpiry')?.value || '').trim();
+      const amazon_tracking_id = (document.getElementById('newSiteAmazonTrackingId')?.value || '').trim();
+      const amazon_account = (document.getElementById('newSiteAmazonAccount')?.value || '').trim();
       const ads = parseFloat(document.getElementById('newSiteAds').value) || 0;
       const amazon = parseFloat(document.getElementById('newSiteAmazon').value) || 0;
 
-      await apiFetch('/api/sites', {
+      const res = await apiFetch('/api/sites', {
         method: 'POST',
         body: JSON.stringify({
           site_name: siteName,
@@ -1447,6 +1577,8 @@
           domain_registrar,
           hosting_provider,
           domain_expiry,
+          amazon_account,
+          amazon_tracking_id,
           articles_count: 0,
           ads_income: ads,
           amazon_income: amazon,
@@ -1454,9 +1586,15 @@
         })
       });
 
+      if (!res || !res.success) {
+        return;
+      }
+
       showToast('New site added to database ✓');
       addSiteModal.classList.add('hidden');
       addSiteForm.reset();
+      if (document.getElementById('newSiteAmazonTrackingId')) document.getElementById('newSiteAmazonTrackingId').value = '';
+      if (document.getElementById('newSiteAmazonAccount')) document.getElementById('newSiteAmazonAccount').value = '';
       if (newSiteRegistrarOther) {
         newSiteRegistrarOther.value = '';
         newSiteRegistrarOther.classList.add('hidden');
@@ -1488,8 +1626,10 @@
       }
 
       const domain_expiry = (editSiteDomainExpiry?.value || '').trim();
+      const amazon_tracking_id = (document.getElementById('editSiteAmazonTrackingId')?.value || '').trim();
+      const amazon_account = (document.getElementById('editSiteAmazonAccount')?.value || '').trim();
 
-      await apiFetch(`/api/sites/${siteId}`, {
+      const res = await apiFetch(`/api/sites/${siteId}`, {
         method: 'PUT',
         body: JSON.stringify({
           site_url: siteUrl,
@@ -1498,9 +1638,15 @@
           status: status,
           domain_registrar,
           hosting_provider,
-          domain_expiry
+          domain_expiry,
+          amazon_account,
+          amazon_tracking_id
         })
       });
+
+      if (!res || !res.success) {
+        return;
+      }
 
       showToast('Site details updated successfully ✓');
       editSiteModal.classList.add('hidden');

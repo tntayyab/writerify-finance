@@ -605,7 +605,8 @@ circle {
 }
 
 .sites-table-container {
-  min-height: 280px;
+  min-height: 320px;
+  padding-bottom: 3.5rem;
 }
 
 .action-dropdown-container {
@@ -646,6 +647,16 @@ circle {
   position: absolute;
   right: 0;
   z-index: 50;
+}
+
+.action-dropdown-menu.open-up {
+  bottom: calc(100% + 4px) !important;
+  top: auto !important;
+}
+
+.action-dropdown-menu.open-down {
+  top: calc(100% + 4px) !important;
+  bottom: auto !important;
 }
 
 .dropdown-item {

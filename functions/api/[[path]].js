@@ -414,6 +414,8 @@ export async function onRequest(context) {
           domain_registrar: s.domain_registrar || '',
           hosting_provider: s.hosting_provider || '',
           domain_expiry: s.domain_expiry || '',
+          amazon_account: s.amazon_account || '',
+          amazon_tracking_id: s.amazon_tracking_id || '',
           articles_count: parseInt(m.articles_count, 10) || 0,
           cost,
           ads_income: ads,
@@ -454,41 +456,50 @@ export async function onRequest(context) {
         try { siteName = new URL(formattedUrl).hostname.replace(/^www\./, ''); } catch { siteName = formattedUrl; }
       }
 
-      const newSites = await sbFetch(env, '/sites', {
-        method: 'POST',
-        headers: { 'Prefer': 'return=representation' },
-        body: JSON.stringify({
-          site_url: formattedUrl,
-          site_name: siteName,
-          username: body.username || '',
-          status: body.status || 'running',
-          domain_registrar: body.domain_registrar || '',
-          hosting_provider: body.hosting_provider || '',
-          domain_expiry: body.domain_expiry || ''
-        })
-      });
+      try {
+        const newSites = await sbFetch(env, '/sites', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            site_url: formattedUrl,
+            site_name: siteName,
+            username: body.username || '',
+            status: body.status || 'running',
+            domain_registrar: body.domain_registrar || '',
+            hosting_provider: body.hosting_provider || '',
+            domain_expiry: body.domain_expiry || '',
+            amazon_account: body.amazon_account || '',
+            amazon_tracking_id: body.amazon_tracking_id || ''
+          })
+        });
 
-      const newSite = Array.isArray(newSites) ? newSites[0] : newSites;
-      if (!newSite || !newSite.id) {
-        return jsonResponse({ success: false, error: 'Failed to create site' }, 500);
+        const newSite = Array.isArray(newSites) ? newSites[0] : newSites;
+        if (!newSite || !newSite.id) {
+          return jsonResponse({ success: false, error: 'Failed to create site' }, 500);
+        }
+
+        const monthKey = body.month_key || new Date().toISOString().slice(0, 7);
+        await sbFetch(env, '/monthly_site_metrics?on_conflict=site_id,month_key', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            site_id: newSite.id,
+            month_key: monthKey,
+            articles_count: body.articles_count || 0,
+            cost: body.cost || 0,
+            ads_income: body.ads_income || 0,
+            amazon_income: body.amazon_income || 0,
+            other_income: 0
+          })
+        });
+
+        return jsonResponse({ success: true, siteId: newSite.id, message: 'Site added successfully' }, 201);
+      } catch (err) {
+        if (err.message && (err.message.includes('23505') || err.message.includes('unique constraint') || err.message.includes('sites_site_url_key') || err.message.includes('409'))) {
+          return jsonResponse({ success: false, error: 'This website URL is already added to your portfolio! (Duplicate URL)' }, 409);
+        }
+        throw err;
       }
-
-      const monthKey = body.month_key || new Date().toISOString().slice(0, 7);
-      await sbFetch(env, '/monthly_site_metrics?on_conflict=site_id,month_key', {
-        method: 'POST',
-        headers: { 'Prefer': 'resolution=merge-duplicates' },
-        body: JSON.stringify({
-          site_id: newSite.id,
-          month_key: monthKey,
-          articles_count: body.articles_count || 0,
-          cost: body.cost || 0,
-          ads_income: body.ads_income || 0,
-          amazon_income: body.amazon_income || 0,
-          other_income: 0
-        })
-      });
-
-      return jsonResponse({ success: true, siteId: newSite.id, message: 'Site added successfully' }, 201);
     }
 
     // PUT /api/sites/:id
@@ -504,6 +515,8 @@ export async function onRequest(context) {
       if (body.domain_registrar !== undefined) updates.domain_registrar = body.domain_registrar;
       if (body.hosting_provider !== undefined) updates.hosting_provider = body.hosting_provider;
       if (body.domain_expiry !== undefined) updates.domain_expiry = body.domain_expiry;
+      if (body.amazon_account !== undefined) updates.amazon_account = body.amazon_account;
+      if (body.amazon_tracking_id !== undefined) updates.amazon_tracking_id = body.amazon_tracking_id;
 
       await sbFetch(env, `/sites?id=eq.${encodeURIComponent(id)}`, {
         method: 'PATCH',
@@ -621,7 +634,7 @@ export async function onRequest(context) {
           sbFetch(env, `/monthly_site_metrics?select=*&month_key=eq.${encodeURIComponent(monthKey)}`).catch(() => [])
         ]);
 
-        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
+        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Amazon Account,Amazon Tracking ID,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
         (sites || []).forEach(s => {
           const m = (metrics || []).find(metric => String(metric.site_id) === String(s.id)) || {};
           const ads = parseFloat(m.ads_income) || 0;
@@ -630,7 +643,7 @@ export async function onRequest(context) {
           const cost = parseFloat(m.cost) || 0;
           const total = ads + amazon + other;
           const profit = total - cost;
-          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${s.domain_registrar || ''}","${s.hosting_provider || ''}","${s.domain_expiry || ''}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
+          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${s.domain_registrar || ''}","${s.hosting_provider || ''}","${s.domain_expiry || ''}","${s.amazon_account || ''}","${s.amazon_tracking_id || ''}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
         });
 
         return textResponse(csv, 200, 'text/csv', `writerify_sites_${monthKey}.csv`);

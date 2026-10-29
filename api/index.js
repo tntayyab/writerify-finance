@@ -278,6 +278,8 @@ export default async function handler(req, res) {
           domain_registrar: s.domain_registrar || '',
           hosting_provider: s.hosting_provider || '',
           domain_expiry: s.domain_expiry || '',
+          amazon_account: s.amazon_account || '',
+          amazon_tracking_id: s.amazon_tracking_id || '',
           articles_count: parseInt(m.articles_count, 10) || 0,
           cost,
           ads_income: ads,
@@ -325,10 +327,15 @@ export default async function handler(req, res) {
         status: body.status || 'running',
         domain_registrar: body.domain_registrar || '',
         hosting_provider: body.hosting_provider || '',
-        domain_expiry: body.domain_expiry || ''
+        domain_expiry: body.domain_expiry || '',
+        amazon_account: body.amazon_account || '',
+        amazon_tracking_id: body.amazon_tracking_id || ''
       }).select('id').single();
 
       if (error) {
+        if (error.code === '23505' || (error.message && error.message.includes('unique constraint'))) {
+          return sendJson(res, 409, { success: false, error: 'This website URL is already added to your portfolio! (Duplicate URL)' });
+        }
         return sendJson(res, 400, { success: false, error: error.message });
       }
 
@@ -359,6 +366,8 @@ export default async function handler(req, res) {
       if (body.domain_registrar !== undefined) updates.domain_registrar = body.domain_registrar;
       if (body.hosting_provider !== undefined) updates.hosting_provider = body.hosting_provider;
       if (body.domain_expiry !== undefined) updates.domain_expiry = body.domain_expiry;
+      if (body.amazon_account !== undefined) updates.amazon_account = body.amazon_account;
+      if (body.amazon_tracking_id !== undefined) updates.amazon_tracking_id = body.amazon_tracking_id;
 
       const { error } = await supabase.from('sites').update(updates).eq('id', id);
       if (error) return sendJson(res, 400, { success: false, error: error.message });
@@ -464,7 +473,7 @@ export default async function handler(req, res) {
           supabase.from('monthly_site_metrics').select('*').eq('month_key', monthKey)
         ]);
 
-        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
+        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Amazon Account,Amazon Tracking ID,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
         (sitesRes.data || []).forEach(s => {
           const m = (metricsRes.data || []).find(metric => String(metric.site_id) === String(s.id)) || {};
           const ads = parseFloat(m.ads_income) || 0;
@@ -473,7 +482,7 @@ export default async function handler(req, res) {
           const cost = parseFloat(m.cost) || 0;
           const total = ads + amazon + other;
           const profit = total - cost;
-          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${s.domain_registrar || ''}","${s.hosting_provider || ''}","${s.domain_expiry || ''}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
+          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${s.domain_registrar || ''}","${s.hosting_provider || ''}","${s.domain_expiry || ''}","${s.amazon_account || ''}","${s.amazon_tracking_id || ''}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
         });
 
         res.setHeader('Content-Disposition', `attachment; filename="writerify_sites_${monthKey}.csv"`);

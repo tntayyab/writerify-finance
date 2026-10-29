@@ -536,6 +536,8 @@ const server = http.createServer(async (req, res) => {
           COALESCE(s.domain_registrar, '') as domain_registrar,
           COALESCE(s.hosting_provider, '') as hosting_provider,
           COALESCE(s.domain_expiry, '') as domain_expiry,
+          COALESCE(s.amazon_account, '') as amazon_account,
+          COALESCE(s.amazon_tracking_id, '') as amazon_tracking_id,
           COALESCE(m.articles_count, 0) as articles_count,
           COALESCE(m.cost, 0) as cost,
           COALESCE(m.ads_income, 0) as ads_income,
@@ -596,14 +598,16 @@ const server = http.createServer(async (req, res) => {
       const domain_registrar = body.domain_registrar || '';
       const hosting_provider = body.hosting_provider || '';
       const domain_expiry = body.domain_expiry || '';
+      const amazon_account = body.amazon_account || '';
+      const amazon_tracking_id = body.amazon_tracking_id || '';
       const monthKey = body.month_key || new Date().toISOString().slice(0, 7);
 
       try {
         const stmt = db.prepare(`
-          INSERT INTO sites (site_url, site_name, username, status, domain_registrar, hosting_provider, domain_expiry)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO sites (site_url, site_name, username, status, domain_registrar, hosting_provider, domain_expiry, amazon_account, amazon_tracking_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        const resInsert = stmt.run(formattedUrl, siteName, username, status, domain_registrar, hosting_provider, domain_expiry);
+        const resInsert = stmt.run(formattedUrl, siteName, username, status, domain_registrar, hosting_provider, domain_expiry, amazon_account, amazon_tracking_id);
         const siteId = resInsert.lastInsertRowid;
 
         // Initialize metrics row
@@ -616,7 +620,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 201, { success: true, siteId, message: 'Site added successfully' });
       } catch (err) {
         if (err.message && err.message.includes('UNIQUE constraint failed')) {
-          return sendJson(res, 409, { success: false, error: 'A site with this URL already exists' });
+          return sendJson(res, 409, { success: false, error: 'This website URL is already added to your portfolio! (Duplicate URL)' });
         }
         throw err;
       }
@@ -657,6 +661,14 @@ const server = http.createServer(async (req, res) => {
       if (body.domain_expiry !== undefined) {
         updates.push('domain_expiry = ?');
         params.push(body.domain_expiry);
+      }
+      if (body.amazon_account !== undefined) {
+        updates.push('amazon_account = ?');
+        params.push(body.amazon_account);
+      }
+      if (body.amazon_tracking_id !== undefined) {
+        updates.push('amazon_tracking_id = ?');
+        params.push(body.amazon_tracking_id);
       }
 
       if (updates.length === 0) {
@@ -787,6 +799,8 @@ const server = http.createServer(async (req, res) => {
             COALESCE(s.domain_registrar, '') as domain_registrar,
             COALESCE(s.hosting_provider, '') as hosting_provider,
             COALESCE(s.domain_expiry, '') as domain_expiry,
+            COALESCE(s.amazon_account, '') as amazon_account,
+            COALESCE(s.amazon_tracking_id, '') as amazon_tracking_id,
             COALESCE(m.articles_count, 0) as articles,
             COALESCE(m.cost, 0) as cost,
             COALESCE(m.ads_income, 0) as ads_income,
@@ -799,9 +813,9 @@ const server = http.createServer(async (req, res) => {
           ORDER BY s.id ASC
         `).all(monthKey);
 
-        let csv = 'ID,Site URL,Site Name,Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Articles,Cost (USD),Ads Income (USD),Amazon Income (USD),Other Income (USD),Total Income (USD),Net Profit (USD)\n';
+        let csv = 'ID,Site URL,Site Name,Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Amazon Account,Amazon Tracking ID,Articles,Cost (USD),Ads Income (USD),Amazon Income (USD),Other Income (USD),Total Income (USD),Net Profit (USD)\n';
         for (const r of rows) {
-          csv += `"${r.id}","${r.site_url}","${r.site_name}","${r.username}","${r.status}","${r.domain_registrar}","${r.hosting_provider}","${r.domain_expiry}",${r.articles},${r.cost},${r.ads_income},${r.amazon_income},${r.other_income},${r.total_income},${r.profit}\n`;
+          csv += `"${r.id}","${r.site_url}","${r.site_name}","${r.username}","${r.status}","${r.domain_registrar}","${r.hosting_provider}","${r.domain_expiry}","${r.amazon_account}","${r.amazon_tracking_id}",${r.articles},${r.cost},${r.ads_income},${r.amazon_income},${r.other_income},${r.total_income},${r.profit}\n`;
         }
 
         res.writeHead(200, {

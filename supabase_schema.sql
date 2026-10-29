@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS sites (
   domain_registrar TEXT DEFAULT '',
   hosting_provider TEXT DEFAULT '',
   domain_expiry TEXT DEFAULT '',
+  amazon_account TEXT DEFAULT '',
+  amazon_tracking_id TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
