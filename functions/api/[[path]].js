@@ -1,12 +1,44 @@
-import { createClient } from '@supabase/supabase-js';
+// Cloudflare Pages Functions API adapter for Supabase
+// Native fetch implementation (Zero npm dependencies required for Cloudflare Pages Functions)
 
-function getSupabase(env) {
-  const url = env.SUPABASE_URL;
-  const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_KEY in Cloudflare environment variables.');
+const DEFAULT_SUPABASE_URL = 'https://eqahxzlmgcjosdwgmwzf.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxYWh4emxtZ2Nqb3Nkd2dtd3pmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzI0ODEwMiwiZXhwIjoyMTA4ODI0MTAyfQ.buzRmM6DOGN0y6_D4sYKc5a7J2shBFI9WZq89Ck3vt8';
+
+function getSupabaseConfig(env) {
+  const url = (env && env.SUPABASE_URL) || DEFAULT_SUPABASE_URL;
+  const key = (env && (env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_KEY || env.SUPABASE_ANON_KEY)) || DEFAULT_SUPABASE_KEY;
+  return {
+    url: url.replace(/\/$/, ''),
+    key
+  };
+}
+
+async function sbFetch(env, endpoint, options = {}) {
+  const { url, key } = getSupabaseConfig(env);
+  const targetUrl = `${url}/rest/v1${endpoint}`;
+  
+  const headers = {
+    'apikey': key,
+    'Authorization': `Bearer ${key}`,
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
+
+  const response = await fetch(targetUrl, {
+    ...options,
+    headers
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Supabase REST error (${response.status}): ${errorText}`);
   }
-  return createClient(url, key, { auth: { persistSession: false } });
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return await response.json();
+  }
+  return null;
 }
 
 function corsHeaders() {
@@ -51,14 +83,12 @@ export async function onRequest(context) {
   }
 
   try {
-    const supabase = getSupabase(env);
-
     // GET /api/targets
     if (pathname === '/api/targets' && method === 'GET') {
-      const { data } = await supabase.from('settings').select('*');
+      const data = await sbFetch(env, '/settings?select=*').catch(() => []);
       let goalSites = 500;
       let goalMonthlyIncome = 15000;
-      if (data) {
+      if (Array.isArray(data)) {
         const sSites = data.find(s => s.key === 'goal_sites');
         const sIncome = data.find(s => s.key === 'goal_monthly_income');
         if (sSites) goalSites = parseInt(sSites.value, 10);
@@ -71,10 +101,18 @@ export async function onRequest(context) {
     if (pathname === '/api/targets' && method === 'POST') {
       const body = await request.json().catch(() => ({}));
       if (body.goalSites !== undefined) {
-        await supabase.from('settings').upsert({ key: 'goal_sites', value: String(body.goalSites) });
+        await sbFetch(env, '/settings?on_conflict=key', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({ key: 'goal_sites', value: String(body.goalSites) })
+        });
       }
       if (body.goalMonthlyIncome !== undefined) {
-        await supabase.from('settings').upsert({ key: 'goal_monthly_income', value: String(body.goalMonthlyIncome) });
+        await sbFetch(env, '/settings?on_conflict=key', {
+          method: 'POST',
+          headers: { 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({ key: 'goal_monthly_income', value: String(body.goalMonthlyIncome) })
+        });
       }
       return jsonResponse({ success: true, message: 'Mission targets updated' });
     }
@@ -90,17 +128,17 @@ export async function onRequest(context) {
       const thisYearPrefix = `${curYear}-`;
       const lastYearPrefix = `${curYear - 1}-`;
 
-      const [sitesRes, metricsRes, expensesRes, settingsRes] = await Promise.all([
-        supabase.from('sites').select('id, site_url, site_name, username, status'),
-        supabase.from('monthly_site_metrics').select('*'),
-        supabase.from('expenses_ledger').select('*'),
-        supabase.from('settings').select('*')
+      const [sites, metrics, expenses, settings] = await Promise.all([
+        sbFetch(env, '/sites?select=id,site_url,site_name,username,status').catch(() => []),
+        sbFetch(env, '/monthly_site_metrics?select=*').catch(() => []),
+        sbFetch(env, '/expenses_ledger?select=*').catch(() => []),
+        sbFetch(env, '/settings?select=*').catch(() => [])
       ]);
 
-      const allSites = sitesRes.data || [];
-      const allMetrics = metricsRes.data || [];
-      const allExpenses = expensesRes.data || [];
-      const allSettings = settingsRes.data || [];
+      const allSites = sites || [];
+      const allMetrics = metrics || [];
+      const allExpenses = expenses || [];
+      const allSettings = settings || [];
 
       function getMetricsForMonth(monthKey) {
         const monthMetrics = allMetrics.filter(m => m.month_key === monthKey);
@@ -244,13 +282,13 @@ export async function onRequest(context) {
       const search = (url.searchParams.get('search') || '').trim().toLowerCase();
       const status = (url.searchParams.get('status') || '').trim();
 
-      const [sitesRes, metricsRes] = await Promise.all([
-        supabase.from('sites').select('*').order('id', { ascending: true }),
-        supabase.from('monthly_site_metrics').select('*').eq('month_key', monthKey)
+      const [sites, metrics] = await Promise.all([
+        sbFetch(env, '/sites?select=*&order=id.asc').catch(() => []),
+        sbFetch(env, `/monthly_site_metrics?select=*&month_key=eq.${encodeURIComponent(monthKey)}`).catch(() => [])
       ]);
 
-      let sites = (sitesRes.data || []).map(s => {
-        const m = (metricsRes.data || []).find(metric => String(metric.site_id) === String(s.id)) || {};
+      let siteList = (sites || []).map(s => {
+        const m = (metrics || []).find(metric => String(metric.site_id) === String(s.id)) || {};
         const ads = parseFloat(m.ads_income) || 0;
         const amazon = parseFloat(m.amazon_income) || 0;
         const other = parseFloat(m.other_income) || 0;
@@ -274,18 +312,18 @@ export async function onRequest(context) {
       });
 
       if (status && status !== 'all') {
-        sites = sites.filter(s => s.status === status);
+        siteList = siteList.filter(s => s.status === status);
       }
 
       if (search) {
-        sites = sites.filter(s =>
+        siteList = siteList.filter(s =>
           (s.site_url && s.site_url.toLowerCase().includes(search)) ||
           (s.site_name && s.site_name.toLowerCase().includes(search)) ||
           (s.username && s.username.toLowerCase().includes(search))
         );
       }
 
-      return jsonResponse({ success: true, month: monthKey, count: sites.length, sites });
+      return jsonResponse({ success: true, month: monthKey, count: siteList.length, sites: siteList });
     }
 
     // POST /api/sites
@@ -302,26 +340,35 @@ export async function onRequest(context) {
         try { siteName = new URL(formattedUrl).hostname.replace(/^www\./, ''); } catch { siteName = formattedUrl; }
       }
 
-      const { data: newSite, error } = await supabase.from('sites').insert({
-        site_url: formattedUrl,
-        site_name: siteName,
-        username: body.username || '',
-        status: body.status || 'running'
-      }).select('id').single();
+      const newSites = await sbFetch(env, '/sites', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          site_url: formattedUrl,
+          site_name: siteName,
+          username: body.username || '',
+          status: body.status || 'running'
+        })
+      });
 
-      if (error) {
-        return jsonResponse({ success: false, error: error.message }, 400);
+      const newSite = Array.isArray(newSites) ? newSites[0] : newSites;
+      if (!newSite || !newSite.id) {
+        return jsonResponse({ success: false, error: 'Failed to create site' }, 500);
       }
 
       const monthKey = body.month_key || new Date().toISOString().slice(0, 7);
-      await supabase.from('monthly_site_metrics').insert({
-        site_id: newSite.id,
-        month_key: monthKey,
-        articles_count: body.articles_count || 0,
-        cost: body.cost || 0,
-        ads_income: body.ads_income || 0,
-        amazon_income: body.amazon_income || 0,
-        other_income: 0
+      await sbFetch(env, '/monthly_site_metrics?on_conflict=site_id,month_key', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({
+          site_id: newSite.id,
+          month_key: monthKey,
+          articles_count: body.articles_count || 0,
+          cost: body.cost || 0,
+          ads_income: body.ads_income || 0,
+          amazon_income: body.amazon_income || 0,
+          other_income: 0
+        })
       });
 
       return jsonResponse({ success: true, siteId: newSite.id, message: 'Site added successfully' }, 201);
@@ -338,16 +385,21 @@ export async function onRequest(context) {
       if (body.username !== undefined) updates.username = body.username;
       if (body.status !== undefined) updates.status = body.status;
 
-      const { error } = await supabase.from('sites').update(updates).eq('id', id);
-      if (error) return jsonResponse({ success: false, error: error.message }, 400);
+      await sbFetch(env, `/sites?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(updates)
+      });
+
       return jsonResponse({ success: true, message: 'Site updated successfully' });
     }
 
     // DELETE /api/sites/:id
     if (pathname.startsWith('/api/sites/') && method === 'DELETE') {
       const id = pathname.split('/')[3];
-      const { error } = await supabase.from('sites').delete().eq('id', id);
-      if (error) return jsonResponse({ success: false, error: error.message }, 400);
+      await sbFetch(env, `/sites?id=eq.${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
       return jsonResponse({ success: true, message: 'Site deleted successfully' });
     }
 
@@ -357,19 +409,22 @@ export async function onRequest(context) {
       const { site_id, month_key } = body;
       if (!site_id || !month_key) return jsonResponse({ success: false, error: 'site_id and month_key required' }, 400);
 
-      const { error } = await supabase.from('monthly_site_metrics').upsert({
-        site_id: parseInt(site_id, 10),
-        month_key,
-        articles_count: body.articles_count || 0,
-        cost: parseFloat(body.cost) || 0,
-        ads_income: parseFloat(body.ads_income) || 0,
-        amazon_income: parseFloat(body.amazon_income) || 0,
-        other_income: parseFloat(body.other_income) || 0,
-        notes: body.notes || '',
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'site_id,month_key' });
+      await sbFetch(env, '/monthly_site_metrics?on_conflict=site_id,month_key', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({
+          site_id: parseInt(site_id, 10),
+          month_key,
+          articles_count: body.articles_count || 0,
+          cost: parseFloat(body.cost) || 0,
+          ads_income: parseFloat(body.ads_income) || 0,
+          amazon_income: parseFloat(body.amazon_income) || 0,
+          other_income: parseFloat(body.other_income) || 0,
+          notes: body.notes || '',
+          updated_at: new Date().toISOString()
+        })
+      });
 
-      if (error) return jsonResponse({ success: false, error: error.message }, 400);
       return jsonResponse({ success: true, message: 'Metrics updated successfully' });
     }
 
@@ -379,14 +434,14 @@ export async function onRequest(context) {
       const range = url.searchParams.get('range') || 'thisMonth';
       const [curYear, curMonth] = monthKey.split('-').map(Number);
 
-      const [expensesRes, sitesRes] = await Promise.all([
-        supabase.from('expenses_ledger').select('*').order('expense_date', { ascending: false }),
-        supabase.from('sites').select('id, site_url, site_name')
+      const [expenses, sites] = await Promise.all([
+        sbFetch(env, '/expenses_ledger?select=*&order=expense_date.desc').catch(() => []),
+        sbFetch(env, '/sites?select=id,site_url,site_name').catch(() => [])
       ]);
 
-      const allExpenses = expensesRes.data || [];
+      const allExpenses = expenses || [];
       const sitesMap = {};
-      (sitesRes.data || []).forEach(s => { sitesMap[s.id] = s.site_name || s.site_url; });
+      (sites || []).forEach(s => { sitesMap[s.id] = s.site_name || s.site_url; });
 
       let filtered = allExpenses;
       if (range === 'thisMonth') {
@@ -399,13 +454,13 @@ export async function onRequest(context) {
         filtered = allExpenses.filter(e => e.month_key && e.month_key.startsWith(`${curYear}-`));
       }
 
-      const expenses = filtered.map(e => ({
+      const formattedExpenses = filtered.map(e => ({
         ...e,
         site_name: e.site_id ? (sitesMap[e.site_id] || `Site #${e.site_id}`) : 'Global / Operations'
       }));
 
-      const totalAmount = expenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-      return jsonResponse({ success: true, range, count: expenses.length, totalAmount, expenses });
+      const totalAmount = formattedExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+      return jsonResponse({ success: true, range, count: formattedExpenses.length, totalAmount, expenses: formattedExpenses });
     }
 
     // POST /api/expenses
@@ -418,18 +473,22 @@ export async function onRequest(context) {
       const expenseDate = body.expense_date || new Date().toISOString().slice(0, 10);
       const monthKey = body.month_key || expenseDate.slice(0, 7);
 
-      const { data, error } = await supabase.from('expenses_ledger').insert({
-        expense_date: expenseDate,
-        month_key: monthKey,
-        site_id: body.site_id ? parseInt(body.site_id, 10) : null,
-        category: body.category || 'miscellaneous',
-        title: body.title.trim(),
-        amount: parseFloat(body.amount) || 0,
-        receipt_url: body.receipt_url || ''
-      }).select('id').single();
+      const created = await sbFetch(env, '/expenses_ledger', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          expense_date: expenseDate,
+          month_key: monthKey,
+          site_id: body.site_id ? parseInt(body.site_id, 10) : null,
+          category: body.category || 'miscellaneous',
+          title: body.title.trim(),
+          amount: parseFloat(body.amount) || 0,
+          receipt_url: body.receipt_url || ''
+        })
+      });
 
-      if (error) return jsonResponse({ success: false, error: error.message }, 400);
-      return jsonResponse({ success: true, expenseId: data.id, message: 'Expense added to ledger' }, 201);
+      const item = Array.isArray(created) ? created[0] : created;
+      return jsonResponse({ success: true, expenseId: item ? item.id : null, message: 'Expense added to ledger' }, 201);
     }
 
     // GET /api/export/csv
@@ -437,14 +496,14 @@ export async function onRequest(context) {
       const type = url.searchParams.get('type') || 'sites';
       if (type === 'sites') {
         const monthKey = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
-        const [sitesRes, metricsRes] = await Promise.all([
-          supabase.from('sites').select('*').order('id', { ascending: true }),
-          supabase.from('monthly_site_metrics').select('*').eq('month_key', monthKey)
+        const [sites, metrics] = await Promise.all([
+          sbFetch(env, '/sites?select=*&order=id.asc').catch(() => []),
+          sbFetch(env, `/monthly_site_metrics?select=*&month_key=eq.${encodeURIComponent(monthKey)}`).catch(() => [])
         ]);
 
         let csv = 'ID,Site Name,Site URL,Author/Username,Status,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
-        (sitesRes.data || []).forEach(s => {
-          const m = (metricsRes.data || []).find(metric => String(metric.site_id) === String(s.id)) || {};
+        (sites || []).forEach(s => {
+          const m = (metrics || []).find(metric => String(metric.site_id) === String(s.id)) || {};
           const ads = parseFloat(m.ads_income) || 0;
           const amazon = parseFloat(m.amazon_income) || 0;
           const other = parseFloat(m.other_income) || 0;
@@ -458,7 +517,7 @@ export async function onRequest(context) {
       }
 
       if (type === 'expenses') {
-        const { data: expenses } = await supabase.from('expenses_ledger').select('*').order('expense_date', { ascending: false });
+        const expenses = await sbFetch(env, '/expenses_ledger?select=*&order=expense_date.desc').catch(() => []);
         let csv = 'ID,Date,Month,Site ID,Category,Title,Amount,Receipt URL\n';
         (expenses || []).forEach(e => {
           csv += `"${e.id}","${e.expense_date}","${e.month_key}","${e.site_id || ''}","${e.category}","${(e.title || '').replace(/"/g, '""')}",${(parseFloat(e.amount) || 0).toFixed(2)},"${e.receipt_url || ''}"\n`;
@@ -469,19 +528,19 @@ export async function onRequest(context) {
 
     // GET /api/backup/export
     if (pathname === '/api/backup/export' && method === 'GET') {
-      const [settingsRes, sitesRes, metricsRes, expensesRes] = await Promise.all([
-        supabase.from('settings').select('*'),
-        supabase.from('sites').select('*'),
-        supabase.from('monthly_site_metrics').select('*'),
-        supabase.from('expenses_ledger').select('*')
+      const [settings, sites, metrics, expenses] = await Promise.all([
+        sbFetch(env, '/settings?select=*').catch(() => []),
+        sbFetch(env, '/sites?select=*').catch(() => []),
+        sbFetch(env, '/monthly_site_metrics?select=*').catch(() => []),
+        sbFetch(env, '/expenses_ledger?select=*').catch(() => [])
       ]);
 
       const backup = {
         timestamp: new Date().toISOString(),
-        settings: settingsRes.data || [],
-        sites: sitesRes.data || [],
-        metrics: metricsRes.data || [],
-        expenses: expensesRes.data || []
+        settings: settings || [],
+        sites: sites || [],
+        metrics: metrics || [],
+        expenses: expenses || []
       };
 
       return textResponse(JSON.stringify(backup, null, 2), 200, 'application/json', `kyros_portfolio_full_backup_${Date.now()}.json`);
