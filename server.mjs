@@ -1,8 +1,35 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+
+const ADMIN_EMAIL = 'itsinjamul@gmail.com';
+const ADMIN_PASSWORD = 'Writerify@50463#';
+const AUTH_SECRET = 'KYROS_SECURE_AUTH_KEY_2026_WRITERIFY_50463';
+
+function createToken(email) {
+  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const data = email + ':' + exp;
+  const sig = crypto.createHmac('sha256', AUTH_SECRET).update(data).digest('hex');
+  return Buffer.from(data + ':' + sig).toString('base64url');
+}
+
+function verifyToken(token) {
+  if (!token) return null;
+  try {
+    const raw = Buffer.from(token, 'base64url').toString('utf8');
+    const [email, expStr, sig] = raw.split(':');
+    if (!email || !expStr || !sig) return null;
+    if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return null;
+    if (Number(expStr) < Date.now()) return null;
+    const expectedSig = crypto.createHmac('sha256', AUTH_SECRET).update(email + ':' + expStr).digest('hex');
+    return sig === expectedSig ? { email } : null;
+  } catch {
+    return null;
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -232,6 +259,63 @@ const server = http.createServer(async (req, res) => {
   const pathname = parsedUrl.pathname;
 
   try {
+    // 1. PUBLIC AUTH ROUTE: POST /api/auth/login
+    if (pathname === '/api/auth/login' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const email = (body.email || '').trim().toLowerCase();
+      const password = body.password || '';
+
+      if (email === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASSWORD) {
+        const token = createToken(ADMIN_EMAIL);
+        return sendJson(res, 200, {
+          success: true,
+          token,
+          user: {
+            email: ADMIN_EMAIL,
+            name: 'Injamul Haque',
+            role: 'admin'
+          }
+        });
+      }
+
+      return sendJson(res, 401, { success: false, error: 'Invalid email or password' });
+    }
+
+    // 2. TOKEN EXTRACTION
+    let token = null;
+    const authHeader = req.headers['authorization'] || '';
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7).trim();
+    } else if (parsedUrl.searchParams.has('token')) {
+      token = parsedUrl.searchParams.get('token');
+    }
+
+    // 3. PUBLIC AUTH VERIFY ROUTE: GET /api/auth/verify
+    if (pathname === '/api/auth/verify' && req.method === 'GET') {
+      const authUser = verifyToken(token);
+      if (authUser) {
+        return sendJson(res, 200, {
+          success: true,
+          user: {
+            email: authUser.email,
+            name: 'Injamul Haque',
+            role: 'admin'
+          }
+        });
+      }
+      return sendJson(res, 401, { success: false, error: 'Session expired or invalid token' });
+    }
+
+    // 4. STRICT SECURITY GATE: Protect ALL other /api/* endpoints
+    if (pathname.startsWith('/api/')) {
+      const authenticated = verifyToken(token);
+      if (!authenticated) {
+        return sendJson(res, 401, {
+          success: false,
+          error: 'Unauthorized access. Please log in with authorized credentials.'
+        });
+      }
+    }
     // API: TARGETS (GET / POST)
     if (pathname === '/api/targets' && req.method === 'GET') {
       const goalSites = parseInt(getSetting('goal_sites', '500'), 10);

@@ -65,16 +65,60 @@
     }, 2500);
   }
 
+  // Authentication Management
+  function getAuthToken() {
+    return localStorage.getItem('kyros_auth_token') || '';
+  }
+
+  function setAuthToken(token) {
+    if (token) {
+      localStorage.setItem('kyros_auth_token', token);
+    } else {
+      localStorage.removeItem('kyros_auth_token');
+    }
+  }
+
+  function showLoginScreen() {
+    const loginScreen = document.getElementById('loginScreen');
+    const appContainer = document.getElementById('appContainer');
+    if (loginScreen) loginScreen.classList.remove('hidden');
+    if (appContainer) appContainer.style.display = 'none';
+  }
+
+  function showAppContainer() {
+    const loginScreen = document.getElementById('loginScreen');
+    const appContainer = document.getElementById('appContainer');
+    if (loginScreen) loginScreen.classList.add('hidden');
+    if (appContainer) appContainer.style.display = 'block';
+  }
+
+  function handleLogout() {
+    setAuthToken(null);
+    showLoginScreen();
+    showToast('Signed out safely', 'info');
+  }
+
   // API Call helper
   async function apiFetch(endpoint, options = {}) {
+    const token = getAuthToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers || {})
+    };
+
     try {
       const res = await fetch(endpoint, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.headers || {})
-        },
-        ...options
+        ...options,
+        headers
       });
+
+      if (res.status === 401) {
+        setAuthToken(null);
+        showLoginScreen();
+        throw new Error('Unauthorized or session expired. Please log in.');
+      }
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP error ${res.status}`);
@@ -215,6 +259,67 @@
     }
   }
 
+  function setupAuthHandlers() {
+    const loginForm = document.getElementById('loginForm');
+    const loginEmail = document.getElementById('loginEmail');
+    const loginPassword = document.getElementById('loginPassword');
+    const loginError = document.getElementById('loginError');
+    const loginErrorText = document.getElementById('loginErrorText');
+    const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+    const loginBtnText = document.getElementById('loginBtnText');
+    const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    if (togglePasswordBtn && loginPassword) {
+      togglePasswordBtn.addEventListener('click', () => {
+        const isPassword = loginPassword.type === 'password';
+        loginPassword.type = isPassword ? 'text' : 'password';
+      });
+    }
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', handleLogout);
+    }
+
+    if (loginForm) {
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        loginError.classList.add('hidden');
+        loginSubmitBtn.disabled = true;
+        if (loginBtnText) loginBtnText.textContent = 'Verifying...';
+
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: loginEmail.value.trim(),
+              password: loginPassword.value
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Invalid credentials');
+          }
+
+          setAuthToken(data.token);
+          loginPassword.value = '';
+          showAppContainer();
+          setupEventListeners();
+          showToast('Authenticated! Welcome Boss TN TAYYAB 👑');
+          await loadAllData();
+        } catch (err) {
+          loginErrorText.textContent = err.message || 'Invalid credentials';
+          loginError.classList.remove('hidden');
+        } finally {
+          loginSubmitBtn.disabled = false;
+          if (loginBtnText) loginBtnText.textContent = 'Authenticate & Enter';
+        }
+      });
+    }
+  }
+
   // Init Data Fetching
   async function init() {
     applyTheme(state.theme);
@@ -228,8 +333,26 @@
       });
     }
 
-    setupEventListeners();
-    await loadAllData();
+    setupAuthHandlers();
+
+    const token = getAuthToken();
+    if (!token) {
+      showLoginScreen();
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/auth/verify', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Session invalid');
+      showAppContainer();
+      setupEventListeners();
+      await loadAllData();
+    } catch {
+      setAuthToken(null);
+      showLoginScreen();
+    }
   }
 
   async function loadAllData() {
@@ -839,6 +962,9 @@
 
   // Setup Event Listeners
   function setupEventListeners() {
+    if (state.listenersAttached) return;
+    state.listenersAttached = true;
+
     // Theme Switcher Buttons (Light / Dark / System)
     document.querySelectorAll('.theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1063,18 +1189,21 @@
       await Promise.all([loadSummary(), loadExpenses()]);
     });
 
-    // CSV Exports
+    // CSV Exports (Authenticated)
     document.getElementById('exportCsvBtn').addEventListener('click', () => {
-      window.location.href = `/api/export/csv?type=sites&month=${state.activeMonth}`;
+      const token = getAuthToken();
+      window.location.href = `/api/export/csv?type=sites&month=${state.activeMonth}&token=${encodeURIComponent(token)}`;
     });
 
     document.getElementById('exportExpensesCsvBtn').addEventListener('click', () => {
-      window.location.href = '/api/export/csv?type=expenses';
+      const token = getAuthToken();
+      window.location.href = `/api/export/csv?type=expenses&token=${encodeURIComponent(token)}`;
     });
 
-    // JSON Backup Download
+    // JSON Backup Download (Authenticated)
     document.getElementById('backupBtn').addEventListener('click', () => {
-      window.location.href = '/api/backup/export';
+      const token = getAuthToken();
+      window.location.href = `/api/backup/export?token=${encodeURIComponent(token)}`;
       showToast('Backup snapshot generated ✓');
     });
 

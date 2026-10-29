@@ -13,6 +13,53 @@
   <!-- Top Notification Toast -->
   <div id="toast" class="toast"></div>
 
+  <!-- HIGH SECURITY LOGIN SCREEN (Protected Admin Portal) -->
+  <div id="loginScreen" class="login-wrapper">
+    <div class="login-card">
+      <div class="login-logo-glow">👑</div>
+      <h2 class="login-title">Writerify & KYROS</h2>
+      <p class="login-subtitle">Finance & Portfolio Command Center<br><span class="text-xs text-brand-400 font-mono">Restricted Access • Authorized Admin Only</span></p>
+
+      <div id="loginError" class="login-error hidden">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span id="loginErrorText">Invalid email or password. Access denied.</span>
+      </div>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="login-input-group">
+          <label class="login-label" for="loginEmail">Admin Email</label>
+          <div class="login-input-wrapper">
+            <svg class="login-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"/></svg>
+            <input type="email" id="loginEmail" class="login-input" placeholder="itsinjamul@gmail.com" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="login-input-group">
+          <label class="login-label" for="loginPassword">Password</label>
+          <div class="login-input-wrapper">
+            <svg class="login-input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            <input type="password" id="loginPassword" class="login-input" placeholder="••••••••••••" required autocomplete="current-password">
+            <button type="button" id="togglePasswordBtn" class="login-password-toggle" title="Show / Hide Password">
+              <svg id="eyeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="loginSubmitBtn" class="login-btn">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+          <span id="loginBtnText">Authenticate & Enter</span>
+        </button>
+      </form>
+
+      <div class="login-footer-badge">
+        <span>🔒</span> End-to-End Encrypted Session
+      </div>
+    </div>
+  </div>
+
+  <!-- PROTECTED APPLICATION CONTAINER (Hidden until authenticated) -->
+  <div id="appContainer" style="display: none;">
+
   <!-- Header -->
   <header class="border-b border-border bg-card/80 backdrop-blur sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
     <div class="flex items-center gap-3">
@@ -65,7 +112,7 @@
 
       <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        SQLite WAL Live
+        PostgreSQL Cloud Live
       </div>
 
       <button id="exportCsvBtn" class="btn-secondary text-xs" title="Export CSV for Excel">
@@ -82,6 +129,21 @@
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         Restore
       </button>
+
+      <!-- Admin Profile & Logout -->
+      <div class="flex items-center gap-2 pl-3 ml-1 border-l border-border">
+        <div class="w-7 h-7 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs border border-brand-500/30">
+          👑
+        </div>
+        <div class="hidden xl:block text-left text-xs leading-tight">
+          <div class="font-bold text-white text-[11px]">itsinjamul@gmail.com</div>
+          <div class="text-[10px] text-emerald-400 font-mono">● Admin Authorized</div>
+        </div>
+        <button id="logoutBtn" class="btn-secondary text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border-rose-500/20" title="Sign Out">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          <span class="hidden sm:inline">Logout</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -669,6 +731,8 @@
     </div>
   </div>
 
-  <script src="app.js?v=1.6"></script>
+  </div> <!-- /#appContainer -->
+
+  <script src="app.js?v=2.0"></script>
 </body>
 </html>

@@ -1,8 +1,59 @@
 // Cloudflare Pages Functions API adapter for Supabase
 // Native fetch implementation (Zero npm dependencies required for Cloudflare Pages Functions)
+// Integrated High-Security Authentication Gate (Restricted to Authorized Admin)
 
 const DEFAULT_SUPABASE_URL = 'https://eqahxzlmgcjosdwgmwzf.supabase.co';
 const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxYWh4emxtZ2Nqb3Nkd2dtd3pmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MzI0ODEwMiwiZXhwIjoyMTA4ODI0MTAyfQ.buzRmM6DOGN0y6_D4sYKc5a7J2shBFI9WZq89Ck3vt8';
+
+const ADMIN_EMAIL = 'itsinjamul@gmail.com';
+const ADMIN_PASSWORD = 'Writerify@50463#';
+const AUTH_SECRET = 'KYROS_SECURE_AUTH_KEY_2026_WRITERIFY_50463';
+
+async function createToken(email) {
+  const exp = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days session
+  const data = email + ':' + exp;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(AUTH_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+  const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const full = data + ':' + sigHex;
+  return btoa(full).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function verifyToken(token) {
+  if (!token) return null;
+  try {
+    let b64 = token.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const raw = atob(b64);
+    const parts = raw.split(':');
+    if (parts.length !== 3) return null;
+    const [email, expStr, sigHex] = parts;
+    if (email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return null;
+    if (Number(expStr) < Date.now()) return null;
+
+    const data = email + ':' + expStr;
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(AUTH_SECRET),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+    const expectedHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return sigHex === expectedHex ? { email } : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 function getSupabaseConfig(env) {
   const url = (env && env.SUPABASE_URL) || DEFAULT_SUPABASE_URL;
@@ -83,6 +134,66 @@ export async function onRequest(context) {
   }
 
   try {
+    // 1. PUBLIC AUTH ROUTE: POST /api/auth/login
+    if (pathname === '/api/auth/login' && method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const email = (body.email || '').trim().toLowerCase();
+      const password = body.password || '';
+
+      if (email === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASSWORD) {
+        const token = await createToken(ADMIN_EMAIL);
+        return jsonResponse({
+          success: true,
+          token,
+          user: {
+            email: ADMIN_EMAIL,
+            name: 'Injamul Haque',
+            role: 'admin'
+          }
+        });
+      }
+
+      return jsonResponse({ success: false, error: 'Invalid email or password' }, 401);
+    }
+
+    // 2. EXTRACT AUTH TOKEN
+    let token = null;
+    const authHeader = request.headers.get('Authorization') || '';
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7).trim();
+    } else if (url.searchParams.has('token')) {
+      token = url.searchParams.get('token');
+    }
+
+    // 3. PUBLIC AUTH VERIFY ROUTE: GET /api/auth/verify
+    if (pathname === '/api/auth/verify' && method === 'GET') {
+      const authUser = await verifyToken(token);
+      if (authUser) {
+        return jsonResponse({
+          success: true,
+          user: {
+            email: authUser.email,
+            name: 'Injamul Haque',
+            role: 'admin'
+          }
+        });
+      }
+      return jsonResponse({ success: false, error: 'Session expired or invalid token' }, 401);
+    }
+
+    // 4. STRICT SECURITY GATE: Protect ALL other /api/* endpoints
+    const authenticated = await verifyToken(token);
+    if (!authenticated) {
+      return jsonResponse({
+        success: false,
+        error: 'Unauthorized access. Please log in with authorized credentials.'
+      }, 401);
+    }
+
+    // ==========================================
+    // PROTECTED ENDPOINTS (Authorized Admin Only)
+    // ==========================================
+
     // GET /api/targets
     if (pathname === '/api/targets' && method === 'GET') {
       const data = await sbFetch(env, '/settings?select=*').catch(() => []);
