@@ -500,13 +500,13 @@
           <thead>
             <tr class="border-b border-border bg-dark/40 text-slate-400 text-[11px] font-semibold uppercase tracking-wider">
               <th class="py-3 px-3 w-12 text-center">#</th>
-              <th class="py-3 px-4">Site & Author</th>
-              <th class="py-3 px-3 w-32">Status</th>
-              <th class="py-3 px-3 text-right w-28">Ads ($)</th>
-              <th class="py-3 px-3 text-right w-28">Amazon ($)</th>
-              <th class="py-3 px-3 text-right w-32">Total Income</th>
-              <th class="py-3 px-3 text-right w-32">Profit</th>
-              <th class="py-3 px-3 text-center w-16">Actions</th>
+              <th class="py-3 px-4 min-w-[170px]">Site & Author</th>
+              <th class="py-3 px-3 w-28">Status</th>
+              <th class="py-3 px-4 min-w-[190px]">Details</th>
+              <th class="py-3 px-3 text-right w-24">Ads ($)</th>
+              <th class="py-3 px-3 text-right w-24">Amazon ($)</th>
+              <th class="py-3 px-3 text-right w-28">Total Income</th>
+              <th class="py-3 px-3 text-center w-14">Actions</th>
             </tr>
           </thead>
           <tbody id="sitesTableBody" class="divide-y divide-border/60">
@@ -665,6 +665,20 @@
             </select>
           </div>
         </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Domain Registrar</label>
+            <input type="text" id="newSiteRegistrar" list="registrarList" placeholder="e.g. Namecheap, ExonHost" class="input w-full">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Hosting / Server</label>
+            <input type="text" id="newSiteHosting" list="hostingList" placeholder="e.g. Shared, VPS" class="input w-full">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Domain Expiry Date</label>
+            <input type="date" id="newSiteDomainExpiry" class="input w-full font-mono text-xs">
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-2.5">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Ads ($)</label>
@@ -713,6 +727,20 @@
               <option value="deleted">Deleted</option>
               <option value="sold">Sold / Dead</option>
             </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Domain Registrar</label>
+            <input type="text" id="editSiteRegistrar" list="registrarList" placeholder="e.g. Namecheap, ExonHost" class="input w-full">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Hosting / Server</label>
+            <input type="text" id="editSiteHosting" list="hostingList" placeholder="e.g. Shared, VPS" class="input w-full">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Domain Expiry Date</label>
+            <input type="date" id="editSiteDomainExpiry" class="input w-full font-mono text-xs">
           </div>
         </div>
         <div class="flex items-center justify-end gap-2 pt-3 border-t border-border">
@@ -802,6 +830,25 @@
   </div> <!-- /.app-layout -->
   </div> <!-- /#appContainer -->
 
-  <script src="app.js?v=2.6"></script>
+  <datalist id="registrarList">
+    <option value="Namecheap">
+    <option value="ExonHost">
+    <option value="GoDaddy">
+    <option value="Cloudflare">
+    <option value="Hostinger">
+    <option value="Porkbun">
+  </datalist>
+  <datalist id="hostingList">
+    <option value="Shared Hosting">
+    <option value="VPS Server">
+    <option value="ExonHost Shared">
+    <option value="ExonHost VPS">
+    <option value="Hetzner VPS">
+    <option value="Contabo VPS">
+    <option value="Cloudflare Pages">
+    <option value="DigitalOcean">
+  </datalist>
+
+  <script src="app.js?v=2.7"></script>
 </body>
 </html>

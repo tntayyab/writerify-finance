@@ -411,6 +411,9 @@ export async function onRequest(context) {
           site_name: s.site_name,
           username: s.username,
           status: s.status,
+          domain_registrar: s.domain_registrar || '',
+          hosting_provider: s.hosting_provider || '',
+          domain_expiry: s.domain_expiry || '',
           articles_count: parseInt(m.articles_count, 10) || 0,
           cost,
           ads_income: ads,
@@ -458,7 +461,10 @@ export async function onRequest(context) {
           site_url: formattedUrl,
           site_name: siteName,
           username: body.username || '',
-          status: body.status || 'running'
+          status: body.status || 'running',
+          domain_registrar: body.domain_registrar || '',
+          hosting_provider: body.hosting_provider || '',
+          domain_expiry: body.domain_expiry || ''
         })
       });
 
@@ -495,6 +501,9 @@ export async function onRequest(context) {
       if (body.site_name !== undefined) updates.site_name = body.site_name;
       if (body.username !== undefined) updates.username = body.username;
       if (body.status !== undefined) updates.status = body.status;
+      if (body.domain_registrar !== undefined) updates.domain_registrar = body.domain_registrar;
+      if (body.hosting_provider !== undefined) updates.hosting_provider = body.hosting_provider;
+      if (body.domain_expiry !== undefined) updates.domain_expiry = body.domain_expiry;
 
       await sbFetch(env, `/sites?id=eq.${encodeURIComponent(id)}`, {
         method: 'PATCH',
@@ -612,7 +621,7 @@ export async function onRequest(context) {
           sbFetch(env, `/monthly_site_metrics?select=*&month_key=eq.${encodeURIComponent(monthKey)}`).catch(() => [])
         ]);
 
-        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
+        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
         (sites || []).forEach(s => {
           const m = (metrics || []).find(metric => String(metric.site_id) === String(s.id)) || {};
           const ads = parseFloat(m.ads_income) || 0;
@@ -621,7 +630,7 @@ export async function onRequest(context) {
           const cost = parseFloat(m.cost) || 0;
           const total = ads + amazon + other;
           const profit = total - cost;
-          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
+          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${s.domain_registrar || ''}","${s.hosting_provider || ''}","${s.domain_expiry || ''}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
         });
 
         return textResponse(csv, 200, 'text/csv', `writerify_sites_${monthKey}.csv`);

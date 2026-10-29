@@ -238,6 +238,9 @@
   const editSiteName = document.getElementById('editSiteName');
   const editSiteUsername = document.getElementById('editSiteUsername');
   const editSiteStatus = document.getElementById('editSiteStatus');
+  const editSiteRegistrar = document.getElementById('editSiteRegistrar');
+  const editSiteHosting = document.getElementById('editSiteHosting');
+  const editSiteDomainExpiry = document.getElementById('editSiteDomainExpiry');
 
   // Theme Engine (Light, Dark, System)
   function applyTheme(themeChoice) {
@@ -718,6 +721,45 @@
         sold: 'bg-slate-800 text-slate-300 border-slate-700'
       };
 
+      // Domain expiry calculation
+      let expiryBadge = '<span class="inline-flex items-center gap-1 text-[10px] text-slate-500 font-mono">📅 No expiry set</span>';
+      let isUrgentExpiry = false;
+
+      if (site.domain_expiry && String(site.domain_expiry).trim()) {
+        const dateStr = String(site.domain_expiry).trim();
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10);
+          const d = parseInt(parts[2], 10);
+          const targetDate = new Date(Date.UTC(y, m - 1, d));
+          const today = new Date();
+          const todayUtc = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+          const diffDays = Math.ceil((targetDate.getTime() - todayUtc.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDays <= 0) {
+            isUrgentExpiry = true;
+            expiryBadge = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/25 text-rose-300 border border-rose-500/60 shadow-sm animate-pulse" title="Domain expired on ${dateStr}">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+              <span>⚠️ Expired (${dateStr})</span>
+            </span>`;
+          } else if (diffDays <= 30) {
+            isUrgentExpiry = true;
+            expiryBadge = `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/50 shadow-sm" title="Expiring soon: ${diffDays} days left (${dateStr})">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+              <span>⚠️ ${diffDays}d left (${dateStr})</span>
+            </span>`;
+          } else {
+            expiryBadge = `<span class="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono" title="${diffDays} days remaining">
+              <span>📅</span>
+              <span>${dateStr} (${diffDays}d)</span>
+            </span>`;
+          }
+        } else {
+          expiryBadge = `<span class="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono">📅 ${dateStr}</span>`;
+        }
+      }
+
       rowsHtml += `
         <tr class="hover:bg-card-alt/50 transition-colors group" data-site-id="${site.id}">
           <td class="py-2.5 px-3 text-center font-mono text-slate-400">${rowIndex}</td>
@@ -739,6 +781,21 @@
               <option value="sold" ${site.status === 'sold' ? 'selected' : ''}>Sold</option>
             </select>
           </td>
+          <td class="py-2.5 px-4">
+            <div class="flex flex-col gap-1 min-w-[165px] ${isUrgentExpiry ? 'p-1.5 rounded-md bg-rose-950/40 border border-rose-500/50' : ''}">
+              <div class="flex items-center gap-1.5 text-[11px] text-slate-200 font-medium truncate" title="Domain Registrar: ${site.domain_registrar || 'Not set'}">
+                <span class="text-slate-400 text-xs shrink-0">🌐</span>
+                <span class="truncate">${site.domain_registrar || '<span class="text-slate-500 italic">No registrar</span>'}</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-[10px] text-slate-400 truncate" title="Hosting Provider: ${site.hosting_provider || 'Not set'}">
+                <span class="text-slate-500 text-xs shrink-0">🖥️</span>
+                <span class="truncate">${site.hosting_provider || '<span class="text-slate-500 italic">No hosting</span>'}</span>
+              </div>
+              <div class="mt-0.5">
+                ${expiryBadge}
+              </div>
+            </div>
+          </td>
           <td class="py-2.5 px-3 text-right">
             <input type="number" step="0.01" class="table-input metric-input text-cyan-400 font-bold" data-field="ads_income" data-id="${site.id}" value="${site.ads_income || 0}">
           </td>
@@ -747,9 +804,6 @@
           </td>
           <td class="py-2.5 px-3 text-right font-mono font-bold text-white">
             ${formatMoney(site.total_income)}
-          </td>
-          <td class="py-2.5 px-3 text-right font-mono ${profitClass}">
-            ${formatMoney(site.profit, true)}
           </td>
           <td class="py-2.5 px-3 text-center">
             <div class="action-dropdown-container">
@@ -851,6 +905,9 @@
         editSiteName.value = site.site_name || '';
         editSiteUsername.value = site.username || '';
         editSiteStatus.value = site.status || 'running';
+        if (editSiteRegistrar) editSiteRegistrar.value = site.domain_registrar || '';
+        if (editSiteHosting) editSiteHosting.value = site.hosting_provider || '';
+        if (editSiteDomainExpiry) editSiteDomainExpiry.value = site.domain_expiry || '';
         editSiteModal.classList.remove('hidden');
       });
     });
@@ -1289,6 +1346,9 @@
       const url = document.getElementById('newSiteUrl').value.trim();
       const username = document.getElementById('newSiteUsername').value.trim();
       const status = document.getElementById('newSiteStatus').value;
+      const domain_registrar = (document.getElementById('newSiteRegistrar')?.value || '').trim();
+      const hosting_provider = (document.getElementById('newSiteHosting')?.value || '').trim();
+      const domain_expiry = (document.getElementById('newSiteDomainExpiry')?.value || '').trim();
       const ads = parseFloat(document.getElementById('newSiteAds').value) || 0;
       const amazon = parseFloat(document.getElementById('newSiteAmazon').value) || 0;
 
@@ -1299,6 +1359,9 @@
           site_url: url,
           username,
           status,
+          domain_registrar,
+          hosting_provider,
+          domain_expiry,
           articles_count: 0,
           ads_income: ads,
           amazon_income: amazon,
@@ -1320,6 +1383,9 @@
       const siteName = editSiteName.value.trim();
       const username = editSiteUsername.value.trim();
       const status = editSiteStatus.value;
+      const domain_registrar = (editSiteRegistrar?.value || '').trim();
+      const hosting_provider = (editSiteHosting?.value || '').trim();
+      const domain_expiry = (editSiteDomainExpiry?.value || '').trim();
 
       await apiFetch(`/api/sites/${siteId}`, {
         method: 'PUT',
@@ -1327,7 +1393,10 @@
           site_url: siteUrl,
           site_name: siteName,
           username: username,
-          status: status
+          status: status,
+          domain_registrar,
+          hosting_provider,
+          domain_expiry
         })
       });
 

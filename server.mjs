@@ -533,6 +533,9 @@ const server = http.createServer(async (req, res) => {
           s.site_name,
           s.username,
           s.status,
+          COALESCE(s.domain_registrar, '') as domain_registrar,
+          COALESCE(s.hosting_provider, '') as hosting_provider,
+          COALESCE(s.domain_expiry, '') as domain_expiry,
           COALESCE(m.articles_count, 0) as articles_count,
           COALESCE(m.cost, 0) as cost,
           COALESCE(m.ads_income, 0) as ads_income,
@@ -590,14 +593,17 @@ const server = http.createServer(async (req, res) => {
 
       const username = body.username || '';
       const status = body.status || 'running';
+      const domain_registrar = body.domain_registrar || '';
+      const hosting_provider = body.hosting_provider || '';
+      const domain_expiry = body.domain_expiry || '';
       const monthKey = body.month_key || new Date().toISOString().slice(0, 7);
 
       try {
         const stmt = db.prepare(`
-          INSERT INTO sites (site_url, site_name, username, status)
-          VALUES (?, ?, ?, ?)
+          INSERT INTO sites (site_url, site_name, username, status, domain_registrar, hosting_provider, domain_expiry)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
-        const resInsert = stmt.run(formattedUrl, siteName, username, status);
+        const resInsert = stmt.run(formattedUrl, siteName, username, status, domain_registrar, hosting_provider, domain_expiry);
         const siteId = resInsert.lastInsertRowid;
 
         // Initialize metrics row
@@ -639,6 +645,18 @@ const server = http.createServer(async (req, res) => {
       if (body.status !== undefined) {
         updates.push('status = ?');
         params.push(body.status);
+      }
+      if (body.domain_registrar !== undefined) {
+        updates.push('domain_registrar = ?');
+        params.push(body.domain_registrar);
+      }
+      if (body.hosting_provider !== undefined) {
+        updates.push('hosting_provider = ?');
+        params.push(body.hosting_provider);
+      }
+      if (body.domain_expiry !== undefined) {
+        updates.push('domain_expiry = ?');
+        params.push(body.domain_expiry);
       }
 
       if (updates.length === 0) {
@@ -766,6 +784,9 @@ const server = http.createServer(async (req, res) => {
         const rows = db.prepare(`
           SELECT 
             s.id, s.site_url, s.site_name, s.username, s.status,
+            COALESCE(s.domain_registrar, '') as domain_registrar,
+            COALESCE(s.hosting_provider, '') as hosting_provider,
+            COALESCE(s.domain_expiry, '') as domain_expiry,
             COALESCE(m.articles_count, 0) as articles,
             COALESCE(m.cost, 0) as cost,
             COALESCE(m.ads_income, 0) as ads_income,
@@ -778,9 +799,9 @@ const server = http.createServer(async (req, res) => {
           ORDER BY s.id ASC
         `).all(monthKey);
 
-        let csv = 'ID,Site URL,Site Name,Username,Status,Articles,Cost (USD),Ads Income (USD),Amazon Income (USD),Other Income (USD),Total Income (USD),Net Profit (USD)\n';
+        let csv = 'ID,Site URL,Site Name,Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Articles,Cost (USD),Ads Income (USD),Amazon Income (USD),Other Income (USD),Total Income (USD),Net Profit (USD)\n';
         for (const r of rows) {
-          csv += `"${r.id}","${r.site_url}","${r.site_name}","${r.username}","${r.status}",${r.articles},${r.cost},${r.ads_income},${r.amazon_income},${r.other_income},${r.total_income},${r.profit}\n`;
+          csv += `"${r.id}","${r.site_url}","${r.site_name}","${r.username}","${r.status}","${r.domain_registrar}","${r.hosting_provider}","${r.domain_expiry}",${r.articles},${r.cost},${r.ads_income},${r.amazon_income},${r.other_income},${r.total_income},${r.profit}\n`;
         }
 
         res.writeHead(200, {

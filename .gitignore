@@ -1,7 +1,6 @@
 # SQLite database files and WAL logs
-data/kyros_portfolio.db
-data/kyros_portfolio.db-shm
-data/kyros_portfolio.db-wal
+data/kyros_portfolio.db*
+data/writerify_portfolio.db*
 data/backups/
 
 # Logs and system

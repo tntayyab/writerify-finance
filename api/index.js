@@ -275,6 +275,9 @@ export default async function handler(req, res) {
           site_name: s.site_name,
           username: s.username,
           status: s.status,
+          domain_registrar: s.domain_registrar || '',
+          hosting_provider: s.hosting_provider || '',
+          domain_expiry: s.domain_expiry || '',
           articles_count: parseInt(m.articles_count, 10) || 0,
           cost,
           ads_income: ads,
@@ -319,7 +322,10 @@ export default async function handler(req, res) {
         site_url: formattedUrl,
         site_name: siteName,
         username: body.username || '',
-        status: body.status || 'running'
+        status: body.status || 'running',
+        domain_registrar: body.domain_registrar || '',
+        hosting_provider: body.hosting_provider || '',
+        domain_expiry: body.domain_expiry || ''
       }).select('id').single();
 
       if (error) {
@@ -350,6 +356,9 @@ export default async function handler(req, res) {
       if (body.site_name !== undefined) updates.site_name = body.site_name;
       if (body.username !== undefined) updates.username = body.username;
       if (body.status !== undefined) updates.status = body.status;
+      if (body.domain_registrar !== undefined) updates.domain_registrar = body.domain_registrar;
+      if (body.hosting_provider !== undefined) updates.hosting_provider = body.hosting_provider;
+      if (body.domain_expiry !== undefined) updates.domain_expiry = body.domain_expiry;
 
       const { error } = await supabase.from('sites').update(updates).eq('id', id);
       if (error) return sendJson(res, 400, { success: false, error: error.message });
@@ -455,7 +464,7 @@ export default async function handler(req, res) {
           supabase.from('monthly_site_metrics').select('*').eq('month_key', monthKey)
         ]);
 
-        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
+        let csv = 'ID,Site Name,Site URL,Author/Username,Status,Domain Registrar,Hosting Provider,Domain Expiry,Month,Articles,Cost,Ads Income,Amazon Income,Other Income,Total Income,Profit\n';
         (sitesRes.data || []).forEach(s => {
           const m = (metricsRes.data || []).find(metric => String(metric.site_id) === String(s.id)) || {};
           const ads = parseFloat(m.ads_income) || 0;
@@ -464,7 +473,7 @@ export default async function handler(req, res) {
           const cost = parseFloat(m.cost) || 0;
           const total = ads + amazon + other;
           const profit = total - cost;
-          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
+          csv += `"${s.id}","${s.site_name || ''}","${s.site_url}","${s.username || ''}","${s.status}","${s.domain_registrar || ''}","${s.hosting_provider || ''}","${s.domain_expiry || ''}","${monthKey}",${m.articles_count || 0},${cost.toFixed(2)},${ads.toFixed(2)},${amazon.toFixed(2)},${other.toFixed(2)},${total.toFixed(2)},${profit.toFixed(2)}\n`;
         });
 
         res.setHeader('Content-Disposition', `attachment; filename="writerify_sites_${monthKey}.csv"`);

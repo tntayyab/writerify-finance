@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS sites (
   site_name TEXT,
   username TEXT DEFAULT '',
   status TEXT DEFAULT 'running', -- 'running', 'penalty', 'deleted', 'sold'
+  domain_registrar TEXT DEFAULT '',
+  hosting_provider TEXT DEFAULT '',
+  domain_expiry TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
