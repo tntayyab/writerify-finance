@@ -970,7 +970,6 @@ NOTIFY pgrst, 'reload schema';`;
       { key: 'domain', label: 'Domain & hosting', sortable: true, sortValue: (s) => expiryInfo(s).time },
       { key: 'ads', label: 'Ads ($)', align: 'right', sortable: true, firstDir: 'desc', sortValue: (s) => s.ads_income },
       { key: 'amazon', label: 'Amazon ($)', align: 'right', sortable: true, firstDir: 'desc', sortValue: (s) => s.amazon_income },
-      { key: 'other', label: 'Other ($)', align: 'right', sortable: true, firstDir: 'desc', sortValue: (s) => s.other_income + (s.entry_income || 0) },
       { key: 'total', label: 'Total', align: 'right', sortable: true, firstDir: 'desc', sortValue: (s) => s.total_income },
       { key: 'act', label: '', align: 'right', width: '120px' }
     ],
@@ -989,9 +988,8 @@ NOTIFY pgrst, 'reload schema';`;
           <span class="meta-chip ${s.domain_registrar ? '' : 'is-empty'}">${ic('globe', 'xs')}${esc(s.domain_registrar || 'No registrar')}</span>
           <span class="meta-chip ${s.hosting_provider ? '' : 'is-empty'}">${ic('database', 'xs')}${esc(s.hosting_provider || 'No hosting')}</span>
           ${ex.html}</div></td>
-        <td class="right">${money('ads_income', 'var(--info)')}</td>
-        <td class="right">${money('amazon_income', 'var(--warn)')}</td>
-        <td class="amount" data-cell="other">${formatMoney(s.other_income + (s.entry_income || 0))}</td>
+        <td class="center">${money('ads_income', 'var(--info)')}</td>
+        <td class="center">${money('amazon_income', 'var(--warn)')}</td>
         <td class="amount" data-cell="total">${formatMoney(s.total_income)}</td>
         <td><div class="cell-actions">
           <button class="icon-btn" data-act="edit" data-id="${s.id}" title="Edit site">${ic('edit', 'sm')}</button>
@@ -1002,9 +1000,8 @@ NOTIFY pgrst, 'reload schema';`;
     foot(rows) {
       const sum = (f) => rows.reduce((a, s) => a + f(s), 0);
       return `<tr class="tfoot-total"><td></td><td colspan="3">${plural(rows.length, 'site')} · totals</td>
-        <td class="amount" style="color:var(--info)">${formatMoney(sum((s) => s.ads_income))}</td>
-        <td class="amount" style="color:var(--warn)">${formatMoney(sum((s) => s.amazon_income))}</td>
-        <td class="amount">${formatMoney(sum((s) => s.other_income + (s.entry_income || 0)))}</td>
+        <td class="amount" style="color:var(--info);text-align:center">${formatMoney(sum((s) => s.ads_income))}</td>
+        <td class="amount" style="color:var(--warn);text-align:center">${formatMoney(sum((s) => s.amazon_income))}</td>
         <td class="amount text-good">${formatMoney(sum((s) => s.total_income))}</td><td></td></tr>`;
     },
     empty() {
