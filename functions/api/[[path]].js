@@ -92,6 +92,12 @@ async function sbFetch(env, endpoint, options = {}) {
   return null;
 }
 
+// True when Supabase reports the table is missing (migration not run yet)
+function isMissingTable(err) {
+  const msg = String((err && err.message) || '');
+  return msg.includes('PGRST205') || msg.includes('42P01') || /does not exist|schema cache/i.test(msg);
+}
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -239,60 +245,47 @@ export async function onRequest(context) {
       const thisYearPrefix = `${curYear}-`;
       const lastYearPrefix = `${curYear - 1}-`;
 
-      const [sites, metrics, expenses, settings] = await Promise.all([
+      const [sites, metrics, expenses, settings, incomeRows] = await Promise.all([
         sbFetch(env, '/sites?select=id,site_url,site_name,username,status').catch(() => []),
         sbFetch(env, '/monthly_site_metrics?select=*').catch(() => []),
         sbFetch(env, '/expenses_ledger?select=*').catch(() => []),
-        sbFetch(env, '/settings?select=*').catch(() => [])
+        sbFetch(env, '/settings?select=*').catch(() => []),
+        sbFetch(env, '/income_entries?select=*').catch(() => [])
       ]);
 
       const allSites = sites || [];
       const allMetrics = metrics || [];
       const allExpenses = expenses || [];
       const allSettings = settings || [];
+      const allIncome = Array.isArray(incomeRows) ? incomeRows : [];
 
-      function getMetricsForMonth(monthKey) {
-        const monthMetrics = allMetrics.filter(m => m.month_key === monthKey);
-        const monthExpenses = allExpenses.filter(e => e.month_key === monthKey);
+      const num = (v) => parseFloat(v) || 0;
 
-        const ads = monthMetrics.reduce((sum, m) => sum + (parseFloat(m.ads_income) || 0), 0);
-        const amazon = monthMetrics.reduce((sum, m) => sum + (parseFloat(m.amazon_income) || 0), 0);
-        const other = monthMetrics.reduce((sum, m) => sum + (parseFloat(m.other_income) || 0), 0);
-        const siteCost = monthMetrics.reduce((sum, m) => sum + (parseFloat(m.cost) || 0), 0);
-        const articles = monthMetrics.reduce((sum, m) => sum + (parseInt(m.articles_count, 10) || 0), 0);
-        const ledgerCost = monthExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-
-        const income = ads + amazon + other;
+      // Single aggregation pass: site metrics + product income entries (income) vs site cost + ledger (cost)
+      function aggregate(inRange) {
+        let ads = 0, amazon = 0, other = 0, product = 0, siteCost = 0, articles = 0, ledgerCost = 0;
+        for (const m of allMetrics) {
+          if (!m.month_key || !inRange(m.month_key)) continue;
+          ads += num(m.ads_income);
+          amazon += num(m.amazon_income);
+          other += num(m.other_income);
+          siteCost += num(m.cost);
+          articles += parseInt(m.articles_count, 10) || 0;
+        }
+        for (const i of allIncome) {
+          if (i.month_key && inRange(i.month_key)) product += num(i.amount);
+        }
+        for (const e of allExpenses) {
+          if (e.month_key && inRange(e.month_key)) ledgerCost += num(e.amount);
+        }
+        const income = ads + amazon + other + product;
         const cost = siteCost + ledgerCost;
-        return { income, cost, profit: income - cost, ads, amazon, other, articles };
+        return { income, cost, profit: income - cost, ads, amazon, other, product, articles };
       }
 
-      function getMetricsForYear(yearPrefix) {
-        const yearMetrics = allMetrics.filter(m => m.month_key && m.month_key.startsWith(yearPrefix));
-        const yearExpenses = allExpenses.filter(e => e.month_key && e.month_key.startsWith(yearPrefix));
-
-        const ads = yearMetrics.reduce((sum, m) => sum + (parseFloat(m.ads_income) || 0), 0);
-        const amazon = yearMetrics.reduce((sum, m) => sum + (parseFloat(m.amazon_income) || 0), 0);
-        const other = yearMetrics.reduce((sum, m) => sum + (parseFloat(m.other_income) || 0), 0);
-        const siteCost = yearMetrics.reduce((sum, m) => sum + (parseFloat(m.cost) || 0), 0);
-        const ledgerCost = yearExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-
-        const income = ads + amazon + other;
-        const cost = siteCost + ledgerCost;
-        return { income, cost, profit: income - cost };
-      }
-
-      function getLifetimeMetrics() {
-        const ads = allMetrics.reduce((sum, m) => sum + (parseFloat(m.ads_income) || 0), 0);
-        const amazon = allMetrics.reduce((sum, m) => sum + (parseFloat(m.amazon_income) || 0), 0);
-        const other = allMetrics.reduce((sum, m) => sum + (parseFloat(m.other_income) || 0), 0);
-        const siteCost = allMetrics.reduce((sum, m) => sum + (parseFloat(m.cost) || 0), 0);
-        const ledgerCost = allExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-
-        const income = ads + amazon + other;
-        const cost = siteCost + ledgerCost;
-        return { income, cost, profit: income - cost };
-      }
+      const getMetricsForMonth = (monthKey) => aggregate((mk) => mk === monthKey);
+      const getMetricsForYear = (yearPrefix) => aggregate((mk) => mk.startsWith(yearPrefix));
+      const getLifetimeMetrics = () => aggregate(() => true);
 
       const thisMonth = getMetricsForMonth(currentMonthKey);
       const lastMonth = getMetricsForMonth(lastMonthKey);
@@ -328,7 +321,10 @@ export async function onRequest(context) {
         const m = allMetrics.find(metric => String(metric.site_id) === String(s.id) && metric.month_key === currentMonthKey) || {};
         const ads = parseFloat(m.ads_income) || 0;
         const amazon = parseFloat(m.amazon_income) || 0;
-        const other = parseFloat(m.other_income) || 0;
+        const entries = allIncome
+          .filter(i => String(i.site_id) === String(s.id) && i.month_key === currentMonthKey)
+          .reduce((sum, i) => sum + num(i.amount), 0);
+        const other = (parseFloat(m.other_income) || 0) + entries;
         const cost = parseFloat(m.cost) || 0;
         const total = ads + amazon + other;
         return {
@@ -382,29 +378,60 @@ export async function onRequest(context) {
           ads: thisMonth.ads,
           amazon: thisMonth.amazon,
           other: thisMonth.other,
+          product: thisMonth.product,
           total: thisMonth.income
         }
       });
     }
 
-    // GET /api/sites
+    // GET /api/sites  (?month=YYYY-MM | ?from=YYYY-MM&to=YYYY-MM | ?range=all)
     if (pathname === '/api/sites' && method === 'GET') {
-      const monthKey = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
-      const search = (url.searchParams.get('search') || '').trim().toLowerCase();
-      const status = (url.searchParams.get('status') || '').trim();
+      const sp = url.searchParams;
+      const monthKey = sp.get('month') || new Date().toISOString().slice(0, 7);
+      const fromKey = (sp.get('from') || '').slice(0, 7);
+      const toKey = (sp.get('to') || '').slice(0, 7);
+      const lifetime = sp.get('range') === 'all';
+      const hasSpan = !lifetime && (fromKey || toKey);
+      const search = (sp.get('search') || '').trim().toLowerCase();
+      const status = (sp.get('status') || '').trim();
 
-      const [sites, metrics] = await Promise.all([
+      let metricsPath = '/monthly_site_metrics?select=*';
+      if (hasSpan) {
+        if (fromKey) metricsPath += `&month_key=gte.${encodeURIComponent(fromKey)}`;
+        if (toKey) metricsPath += `&month_key=lte.${encodeURIComponent(toKey)}`;
+      } else if (!lifetime) {
+        metricsPath += `&month_key=eq.${encodeURIComponent(monthKey)}`;
+      }
+      const inRange = (mk) => lifetime || (hasSpan ? ((!fromKey || mk >= fromKey) && (!toKey || mk <= toKey)) : mk === monthKey);
+      const editable = !lifetime && (!hasSpan || fromKey === toKey);
+
+      const [sites, metrics, incomeRows] = await Promise.all([
         sbFetch(env, '/sites?select=*&order=id.asc').catch(() => []),
-        sbFetch(env, `/monthly_site_metrics?select=*&month_key=eq.${encodeURIComponent(monthKey)}`).catch(() => [])
+        sbFetch(env, metricsPath).catch(() => []),
+        sbFetch(env, '/income_entries?select=site_id,amount,month_key').catch(() => [])
       ]);
 
+      const agg = {};
+      for (const m of (metrics || [])) {
+        const a = agg[m.site_id] || (agg[m.site_id] = { ads: 0, amazon: 0, other: 0, cost: 0, articles: 0, notes: '' });
+        a.ads += parseFloat(m.ads_income) || 0;
+        a.amazon += parseFloat(m.amazon_income) || 0;
+        a.other += parseFloat(m.other_income) || 0;
+        a.cost += parseFloat(m.cost) || 0;
+        a.articles += parseInt(m.articles_count, 10) || 0;
+        a.notes = m.notes || a.notes;
+      }
+      const entryBySite = {};
+      for (const i of (Array.isArray(incomeRows) ? incomeRows : [])) {
+        if (i.site_id && i.month_key && inRange(i.month_key)) {
+          entryBySite[i.site_id] = (entryBySite[i.site_id] || 0) + (parseFloat(i.amount) || 0);
+        }
+      }
+
       let siteList = (sites || []).map(s => {
-        const m = (metrics || []).find(metric => String(metric.site_id) === String(s.id)) || {};
-        const ads = parseFloat(m.ads_income) || 0;
-        const amazon = parseFloat(m.amazon_income) || 0;
-        const other = parseFloat(m.other_income) || 0;
-        const cost = parseFloat(m.cost) || 0;
-        const total = ads + amazon + other;
+        const a = agg[s.id] || { ads: 0, amazon: 0, other: 0, cost: 0, articles: 0, notes: '' };
+        const entry = entryBySite[s.id] || 0;
+        const total = a.ads + a.amazon + a.other + entry;
         return {
           id: s.id,
           site_url: s.site_url,
@@ -416,14 +443,15 @@ export async function onRequest(context) {
           domain_expiry: s.domain_expiry || '',
           amazon_account: s.amazon_account || '',
           amazon_tracking_id: s.amazon_tracking_id || '',
-          articles_count: parseInt(m.articles_count, 10) || 0,
-          cost,
-          ads_income: ads,
-          amazon_income: amazon,
-          other_income: other,
+          articles_count: a.articles,
+          cost: a.cost,
+          ads_income: a.ads,
+          amazon_income: a.amazon,
+          other_income: a.other,
+          entry_income: entry,
           total_income: total,
-          profit: total - cost,
-          notes: m.notes || ''
+          profit: total - a.cost,
+          notes: a.notes
         };
       });
 
@@ -439,7 +467,7 @@ export async function onRequest(context) {
         );
       }
 
-      return jsonResponse({ success: true, month: monthKey, count: siteList.length, sites: siteList });
+      return jsonResponse({ success: true, month: monthKey, editable, count: siteList.length, sites: siteList });
     }
 
     // POST /api/sites
@@ -624,6 +652,109 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, expenseId: item ? item.id : null, message: 'Expense added to ledger' }, 201);
     }
 
+    // DELETE/PUT /api/expenses/:id
+    if (pathname.startsWith('/api/expenses/') && method === 'DELETE') {
+      const id = pathname.split('/')[3];
+      await sbFetch(env, `/expenses_ledger?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      return jsonResponse({ success: true, message: 'Expense removed' });
+    }
+
+    if (pathname.startsWith('/api/expenses/') && method === 'PUT') {
+      const id = pathname.split('/')[3];
+      const body = await request.json().catch(() => ({}));
+      const updates = {};
+      if (body.expense_date) { updates.expense_date = body.expense_date; updates.month_key = body.expense_date.slice(0, 7); }
+      if (body.category !== undefined) updates.category = body.category;
+      if (body.title !== undefined) updates.title = String(body.title).trim();
+      if (body.amount !== undefined) updates.amount = parseFloat(body.amount) || 0;
+      if (body.site_id !== undefined) updates.site_id = body.site_id ? parseInt(body.site_id, 10) : null;
+      await sbFetch(env, `/expenses_ledger?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates)
+      });
+      return jsonResponse({ success: true, message: 'Expense updated' });
+    }
+
+    // ==========================================
+    // INCOME ENTRIES (product / custom income ledger)
+    // ==========================================
+    if (pathname === '/api/income' && method === 'GET') {
+      try {
+        const [entries, sites] = await Promise.all([
+          sbFetch(env, '/income_entries?select=*&order=income_date.desc,id.desc'),
+          sbFetch(env, '/sites?select=id,site_url,site_name').catch(() => [])
+        ]);
+        const sitesMap = {};
+        (sites || []).forEach(s => { sitesMap[s.id] = s.site_name || s.site_url; });
+        const list = (entries || []).map(e => ({
+          ...e,
+          site_name: e.site_id ? (sitesMap[e.site_id] || `Site #${e.site_id}`) : ''
+        }));
+        const totalAmount = list.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+        return jsonResponse({ success: true, count: list.length, totalAmount, entries: list });
+      } catch (err) {
+        if (isMissingTable(err)) {
+          return jsonResponse({ success: true, setupRequired: true, count: 0, totalAmount: 0, entries: [] });
+        }
+        throw err;
+      }
+    }
+
+    if (pathname === '/api/income' && method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const title = (body.title || '').trim();
+      const product = (body.product || '').trim();
+      if (!title || !product || body.amount === undefined || body.amount === '') {
+        return jsonResponse({ success: false, error: 'product, title and amount are required' }, 400);
+      }
+      const incomeDate = body.income_date || new Date().toISOString().slice(0, 10);
+      try {
+        const created = await sbFetch(env, '/income_entries', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            income_date: incomeDate,
+            month_key: incomeDate.slice(0, 7),
+            product,
+            site_id: body.site_id ? parseInt(body.site_id, 10) : null,
+            title,
+            description: (body.description || '').trim(),
+            amount: parseFloat(body.amount) || 0
+          })
+        });
+        const item = Array.isArray(created) ? created[0] : created;
+        return jsonResponse({ success: true, incomeId: item ? item.id : null, message: 'Income entry added' }, 201);
+      } catch (err) {
+        if (isMissingTable(err)) {
+          return jsonResponse({ success: false, setupRequired: true, error: 'Income table not found. Run the SQL migration in Supabase first.' }, 503);
+        }
+        throw err;
+      }
+    }
+
+    if (pathname.startsWith('/api/income/') && method === 'PUT') {
+      const id = pathname.split('/')[3];
+      const body = await request.json().catch(() => ({}));
+      const updates = { updated_at: new Date().toISOString() };
+      if (body.income_date) { updates.income_date = body.income_date; updates.month_key = body.income_date.slice(0, 7); }
+      if (body.product !== undefined) updates.product = String(body.product).trim();
+      if (body.site_id !== undefined) updates.site_id = body.site_id ? parseInt(body.site_id, 10) : null;
+      if (body.title !== undefined) updates.title = String(body.title).trim();
+      if (body.description !== undefined) updates.description = String(body.description).trim();
+      if (body.amount !== undefined) updates.amount = parseFloat(body.amount) || 0;
+      await sbFetch(env, `/income_entries?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates)
+      });
+      return jsonResponse({ success: true, message: 'Income entry updated' });
+    }
+
+    if (pathname.startsWith('/api/income/') && method === 'DELETE') {
+      const id = pathname.split('/')[3];
+      await sbFetch(env, `/income_entries?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      return jsonResponse({ success: true, message: 'Income entry removed' });
+    }
+
     // GET /api/export/csv
     if (pathname === '/api/export/csv' && method === 'GET') {
       const type = url.searchParams.get('type') || 'sites';
@@ -649,6 +780,16 @@ export async function onRequest(context) {
         return textResponse(csv, 200, 'text/csv', `writerify_sites_${monthKey}.csv`);
       }
 
+      if (type === 'income') {
+        const entries = await sbFetch(env, '/income_entries?select=*&order=income_date.desc').catch(() => []);
+        const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        let csv = 'ID,Date,Product,Site ID,Title,Description,Amount' + String.fromCharCode(10);
+        (entries || []).forEach(e => {
+          csv += [q(e.id), q(e.income_date), q(e.product), q(e.site_id || ''), q(e.title), q(e.description), (parseFloat(e.amount) || 0).toFixed(2)].join(',') + String.fromCharCode(10);
+        });
+        return textResponse(csv, 200, 'text/csv', 'writerify_income_ledger.csv');
+      }
+
       if (type === 'expenses') {
         const expenses = await sbFetch(env, '/expenses_ledger?select=*&order=expense_date.desc').catch(() => []);
         let csv = 'ID,Date,Month,Site ID,Category,Title,Amount,Receipt URL\n';
@@ -661,11 +802,12 @@ export async function onRequest(context) {
 
     // GET /api/backup/export
     if (pathname === '/api/backup/export' && method === 'GET') {
-      const [settings, sites, metrics, expenses] = await Promise.all([
+      const [settings, sites, metrics, expenses, income] = await Promise.all([
         sbFetch(env, '/settings?select=*').catch(() => []),
         sbFetch(env, '/sites?select=*').catch(() => []),
         sbFetch(env, '/monthly_site_metrics?select=*').catch(() => []),
-        sbFetch(env, '/expenses_ledger?select=*').catch(() => [])
+        sbFetch(env, '/expenses_ledger?select=*').catch(() => []),
+        sbFetch(env, '/income_entries?select=*').catch(() => [])
       ]);
 
       const backup = {
@@ -673,10 +815,38 @@ export async function onRequest(context) {
         settings: settings || [],
         sites: sites || [],
         metrics: metrics || [],
-        expenses: expenses || []
+        expenses: expenses || [],
+        income: income || []
       };
 
       return textResponse(JSON.stringify(backup, null, 2), 200, 'application/json', `writerify_finance_full_backup_${Date.now()}.json`);
+    }
+
+    // POST /api/backup/restore — upsert records by ID (existing IDs overwritten, others kept)
+    if (pathname === '/api/backup/restore' && method === 'POST') {
+      const body = await request.json().catch(() => null);
+      if (!body || typeof body !== 'object') {
+        return jsonResponse({ success: false, error: 'Invalid backup file' }, 400);
+      }
+      const upsert = async (table, rows, conflict) => {
+        if (!Array.isArray(rows) || !rows.length) return 0;
+        for (let i = 0; i < rows.length; i += 500) {
+          await sbFetch(env, `/${table}?on_conflict=${conflict}`, {
+            method: 'POST',
+            headers: { 'Prefer': 'resolution=merge-duplicates' },
+            body: JSON.stringify(rows.slice(i, i + 500))
+          });
+        }
+        return rows.length;
+      };
+      const counts = {};
+      // Order matters: sites first (foreign keys), settings keyed by 'key'
+      counts.sites = await upsert('sites', body.sites, 'id');
+      counts.metrics = await upsert('monthly_site_metrics', body.metrics, 'id');
+      counts.expenses = await upsert('expenses_ledger', body.expenses, 'id');
+      counts.settings = await upsert('settings', body.settings, 'key');
+      try { counts.income = await upsert('income_entries', body.income, 'id'); } catch (err) { if (!isMissingTable(err)) throw err; counts.income = 0; }
+      return jsonResponse({ success: true, message: 'Backup restored', counts });
     }
 
     return jsonResponse({ success: false, error: `Endpoint ${pathname} not found` }, 404);

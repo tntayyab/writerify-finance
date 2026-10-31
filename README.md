@@ -14,6 +14,25 @@
 
 ---
 
+## ✨ v4 — Redesigned dashboard + Income section
+
+- **New design system** (light / dark / auto): sidebar workspace nav, hero mission card, stat tiles, SVG trend + donut charts, mobile drawer.
+- **Income section** (sidebar → *Income*): log earnings with **Date, Product, Site, Title, Description, Amount**.
+  Products: **Writerify, Pinterify, Themixify** or any **custom product** (pick *Other…*).
+  Product-wise cards show *total, share, number of sites and entries* — click a card to filter the ledger.
+- **Every table** (Sites, Income, Expenses) has: sortable columns, rows per page **10 / 25 / 50 / 100 / All**, numbered pagination (Prev / 1 2 3 … / Next), search,
+  and date filters **This month · Last month · Last 30 days · This year · Last year · Lifetime · Custom range**.
+- Expenses can now be edited and deleted; the Restore button works (`POST /api/backup/restore`).
+- Downloads (CSV / backup) use the Authorization header — no more auth token in the URL.
+
+### One-time database setup for Income
+Open **Supabase → SQL Editor**, paste [`supabase_income_migration.sql`](supabase_income_migration.sql) and press **Run**.
+Until then the Income section shows the SQL with a *Copy* button and the rest of the app keeps working.
+
+> The Cloudflare Pages function (`functions/api/[[path]].js`) is the live backend. `api/index.js` (Vercel) and `server.mjs` (local SQLite) do not include the Income endpoints.
+
+---
+
 ## 🎯 Features & Core Capabilities
 1. **Persistent SQLite Database:**
    - Database File: `data/kyros_portfolio.db` (SQLite WAL mode).
