@@ -29,7 +29,7 @@
 Open **Supabase → SQL Editor**, paste [`supabase_income_migration.sql`](supabase_income_migration.sql) and press **Run**.
 Until then the Income section shows the SQL with a *Copy* button and the rest of the app keeps working.
 
-> The Cloudflare Pages function (`functions/api/[[path]].js`) is the live backend. `api/index.js` (Vercel) and `server.mjs` (local SQLite) do not include the Income endpoints.
+> **Backends:** the Cloudflare Pages function (`functions/api/[[path]].js`) holds all API logic. `api/index.js` (Vercel) is a thin adapter over it, so both behave identically. `server.mjs` (local SQLite, `npm start`) has the same Income endpoints and creates its own `income_entries` table automatically — no SQL step needed locally.
 
 ---
 

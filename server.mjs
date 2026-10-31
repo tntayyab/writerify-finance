@@ -100,7 +100,25 @@ db.exec(`
     receipt_url TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS income_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    income_date TEXT NOT NULL,
+    month_key TEXT NOT NULL,
+    product TEXT NOT NULL DEFAULT 'Writerify',
+    site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
+
+// Add site detail columns on databases created before they existed
+for (const col of ['domain_registrar', 'hosting_provider', 'domain_expiry', 'amazon_account', 'amazon_tracking_id']) {
+  try { db.exec(`ALTER TABLE sites ADD COLUMN ${col} TEXT DEFAULT ''`); } catch { /* column already exists */ }
+}
 
 // Seed default settings if missing
 function getSetting(key, defaultValue = '') {
@@ -228,13 +246,15 @@ function autoBackup() {
     const metrics = db.prepare('SELECT * FROM monthly_site_metrics').all();
     const expenses = db.prepare('SELECT * FROM expenses_ledger').all();
     const settings = db.prepare('SELECT * FROM settings').all();
+    const income = db.prepare('SELECT * FROM income_entries').all();
 
     const snapshot = {
       timestamp: new Date().toISOString(),
       settings,
       sites,
       metrics,
-      expenses
+      expenses,
+      income
     };
 
     const backupFile = path.join(BACKUPS_DIR, `snapshot_${timestamp}.json`);
@@ -353,83 +373,21 @@ const server = http.createServer(async (req, res) => {
       const thisYearPrefix = `${curYear}-`;
       const lastYearPrefix = `${curYear - 1}-`;
 
-      // Helper for month metrics aggregate
-      function getMetricsForMonth(monthKey) {
-        const row = db.prepare(`
-          SELECT 
-            COALESCE(SUM(ads_income), 0) as ads,
-            COALESCE(SUM(amazon_income), 0) as amazon,
-            COALESCE(SUM(other_income), 0) as other,
-            COALESCE(SUM(cost), 0) as site_cost,
-            COALESCE(SUM(articles_count), 0) as articles
-          FROM monthly_site_metrics
-          WHERE month_key = ?
-        `).get(monthKey);
+            // Aggregate site metrics + product income entries (income) vs site cost + ledger (cost)
+      const aggregate = (where, arg) => {
+        const p = where ? [arg] : [];
+        const row = db.prepare('SELECT COALESCE(SUM(ads_income),0) as ads, COALESCE(SUM(amazon_income),0) as amazon, COALESCE(SUM(other_income),0) as other, COALESCE(SUM(cost),0) as site_cost, COALESCE(SUM(articles_count),0) as articles FROM monthly_site_metrics' + where).get(...p);
+        const exp = db.prepare('SELECT COALESCE(SUM(amount),0) as c FROM expenses_ledger' + where).get(...p);
+        const prod = db.prepare('SELECT COALESCE(SUM(amount),0) as c FROM income_entries' + where).get(...p);
+        const income = row.ads + row.amazon + row.other + prod.c;
+        const cost = row.site_cost + exp.c;
+        return { income, cost, profit: income - cost, ads: row.ads, amazon: row.amazon, other: row.other, product: prod.c, articles: row.articles };
+      };
+      const getMetricsForMonth = (monthKey) => aggregate(' WHERE month_key = ?', monthKey);
+      const getMetricsForYear = (yearPrefix) => aggregate(' WHERE month_key LIKE ?', yearPrefix + '%');
+      const getLifetimeMetrics = () => aggregate('', null);
 
-        const expRow = db.prepare(`
-          SELECT COALESCE(SUM(amount), 0) as ledger_cost
-          FROM expenses_ledger
-          WHERE month_key = ?
-        `).get(monthKey);
-
-        const totalIncome = (row.ads || 0) + (row.amazon || 0) + (row.other || 0);
-        const totalCost = (row.site_cost || 0) + (expRow.ledger_cost || 0);
-        const profit = totalIncome - totalCost;
-
-        return {
-          income: totalIncome,
-          cost: totalCost,
-          profit,
-          ads: row.ads || 0,
-          amazon: row.amazon || 0,
-          other: row.other || 0,
-          articles: row.articles || 0
-        };
-      }
-
-      function getMetricsForYear(yearPrefix) {
-        const row = db.prepare(`
-          SELECT 
-            COALESCE(SUM(ads_income), 0) as ads,
-            COALESCE(SUM(amazon_income), 0) as amazon,
-            COALESCE(SUM(other_income), 0) as other,
-            COALESCE(SUM(cost), 0) as site_cost
-          FROM monthly_site_metrics
-          WHERE month_key LIKE ?
-        `).get(`${yearPrefix}%`);
-
-        const expRow = db.prepare(`
-          SELECT COALESCE(SUM(amount), 0) as ledger_cost
-          FROM expenses_ledger
-          WHERE month_key LIKE ?
-        `).get(`${yearPrefix}%`);
-
-        const totalIncome = (row.ads || 0) + (row.amazon || 0) + (row.other || 0);
-        const totalCost = (row.site_cost || 0) + (expRow.ledger_cost || 0);
-        return { income: totalIncome, cost: totalCost, profit: totalIncome - totalCost };
-      }
-
-      function getLifetimeMetrics() {
-        const row = db.prepare(`
-          SELECT 
-            COALESCE(SUM(ads_income), 0) as ads,
-            COALESCE(SUM(amazon_income), 0) as amazon,
-            COALESCE(SUM(other_income), 0) as other,
-            COALESCE(SUM(cost), 0) as site_cost
-          FROM monthly_site_metrics
-        `).get();
-
-        const expRow = db.prepare(`
-          SELECT COALESCE(SUM(amount), 0) as ledger_cost
-          FROM expenses_ledger
-        `).get();
-
-        const totalIncome = (row.ads || 0) + (row.amazon || 0) + (row.other || 0);
-        const totalCost = (row.site_cost || 0) + (expRow.ledger_cost || 0);
-        return { income: totalIncome, cost: totalCost, profit: totalIncome - totalCost };
-      }
-
-      const thisMonth = getMetricsForMonth(currentMonthKey);
+const thisMonth = getMetricsForMonth(currentMonthKey);
       const lastMonth = getMetricsForMonth(lastMonthKey);
       const thisYear = getMetricsForYear(thisYearPrefix);
       const lastYear = getMetricsForYear(lastYearPrefix);
@@ -468,7 +426,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Top Sites for Selected Month
-      const topSites = db.prepare(`
+      let topSites = db.prepare(`
         SELECT 
           s.id, s.site_url, s.site_name, s.username, s.status,
           COALESCE(m.ads_income, 0) as ads,
@@ -480,8 +438,15 @@ const server = http.createServer(async (req, res) => {
         FROM sites s
         LEFT JOIN monthly_site_metrics m ON s.id = m.site_id AND m.month_key = ?
         ORDER BY total_income DESC
-        LIMIT 5
       `).all(currentMonthKey);
+
+      // Fold product income entries tagged to a site into that site's total, then take the top 5
+      const entryRows = db.prepare('SELECT site_id, COALESCE(SUM(amount),0) as t FROM income_entries WHERE month_key = ? AND site_id IS NOT NULL GROUP BY site_id').all(currentMonthKey);
+      const entryBySite = Object.fromEntries(entryRows.map((r) => [r.site_id, r.t]));
+      topSites = topSites.map((t) => {
+        const extra = entryBySite[t.id] || 0;
+        return { ...t, other: t.other + extra, total_income: t.total_income + extra, profit: t.profit + extra };
+      }).sort((a, b) => b.total_income - a.total_income).slice(0, 5);
 
       // Days left in selected month calculation
       const daysInMonth = new Date(curYear, curMonth, 0).getDate();
@@ -515,24 +480,38 @@ const server = http.createServer(async (req, res) => {
           ads: thisMonth.ads,
           amazon: thisMonth.amazon,
           other: thisMonth.other,
+          product: thisMonth.product,
           total: thisMonth.income
         }
       });
     }
 
-    // API: SITES LIST WITH MONTH METRICS
+    // API: SITES LIST WITH METRICS (?month=YYYY-MM | ?from=YYYY-MM&to=YYYY-MM | ?range=all)
     if (pathname === '/api/sites' && req.method === 'GET') {
-      const monthKey = parsedUrl.searchParams.get('month') || new Date().toISOString().slice(0, 7);
-      const search = (parsedUrl.searchParams.get('search') || '').trim().toLowerCase();
-      const status = (parsedUrl.searchParams.get('status') || '').trim();
+      const sp = parsedUrl.searchParams;
+      const monthKey = sp.get('month') || new Date().toISOString().slice(0, 7);
+      const fromKey = (sp.get('from') || '').slice(0, 7);
+      const toKey = (sp.get('to') || '').slice(0, 7);
+      const lifetime = sp.get('range') === 'all';
+      const hasSpan = !lifetime && !!(fromKey || toKey);
+      const search = (sp.get('search') || '').trim().toLowerCase();
+      const status = (sp.get('status') || '').trim();
+
+      // Shared month filter for metrics and income entries
+      let cond = '1=1';
+      const rangeParams = [];
+      if (hasSpan) {
+        if (fromKey) { cond += ' AND month_key >= ?'; rangeParams.push(fromKey); }
+        if (toKey) { cond += ' AND month_key <= ?'; rangeParams.push(toKey); }
+      } else if (!lifetime) {
+        cond += ' AND month_key = ?';
+        rangeParams.push(monthKey);
+      }
+      const editable = !lifetime && (!hasSpan || fromKey === toKey);
 
       let query = `
-        SELECT 
-          s.id,
-          s.site_url,
-          s.site_name,
-          s.username,
-          s.status,
+        SELECT
+          s.id, s.site_url, s.site_name, s.username, s.status,
           COALESCE(s.domain_registrar, '') as domain_registrar,
           COALESCE(s.hosting_provider, '') as hosting_provider,
           COALESCE(s.domain_expiry, '') as domain_expiry,
@@ -543,14 +522,22 @@ const server = http.createServer(async (req, res) => {
           COALESCE(m.ads_income, 0) as ads_income,
           COALESCE(m.amazon_income, 0) as amazon_income,
           COALESCE(m.other_income, 0) as other_income,
-          (COALESCE(m.ads_income, 0) + COALESCE(m.amazon_income, 0) + COALESCE(m.other_income, 0)) as total_income,
-          ((COALESCE(m.ads_income, 0) + COALESCE(m.amazon_income, 0) + COALESCE(m.other_income, 0)) - COALESCE(m.cost, 0)) as profit,
+          COALESCE(e.entry_income, 0) as entry_income,
+          (COALESCE(m.ads_income, 0) + COALESCE(m.amazon_income, 0) + COALESCE(m.other_income, 0) + COALESCE(e.entry_income, 0)) as total_income,
+          ((COALESCE(m.ads_income, 0) + COALESCE(m.amazon_income, 0) + COALESCE(m.other_income, 0) + COALESCE(e.entry_income, 0)) - COALESCE(m.cost, 0)) as profit,
           COALESCE(m.notes, '') as notes
         FROM sites s
-        LEFT JOIN monthly_site_metrics m ON s.id = m.site_id AND m.month_key = ?
+        LEFT JOIN (
+          SELECT site_id, SUM(articles_count) as articles_count, SUM(cost) as cost, SUM(ads_income) as ads_income,
+                 SUM(amazon_income) as amazon_income, SUM(other_income) as other_income, MAX(notes) as notes
+          FROM monthly_site_metrics WHERE ${cond} GROUP BY site_id
+        ) m ON s.id = m.site_id
+        LEFT JOIN (
+          SELECT site_id, SUM(amount) as entry_income FROM income_entries WHERE ${cond} AND site_id IS NOT NULL GROUP BY site_id
+        ) e ON s.id = e.site_id
         WHERE 1=1
       `;
-      const params = [monthKey];
+      const params = [...rangeParams, ...rangeParams];
 
       if (status && status !== 'all') {
         query += ` AND s.status = ?`;
@@ -566,10 +553,10 @@ const server = http.createServer(async (req, res) => {
       query += ` ORDER BY s.id ASC`;
 
       const rows = db.prepare(query).all(...params);
-      return sendJson(res, 200, { success: true, month: monthKey, count: rows.length, sites: rows });
+      return sendJson(res, 200, { success: true, month: monthKey, editable, count: rows.length, sites: rows });
     }
 
-    // API: ADD NEW SITE
+// API: ADD NEW SITE
     if (pathname === '/api/sites' && req.method === 'POST') {
       const body = await parseJsonBody(req);
       if (!body.site_url) {
@@ -787,6 +774,80 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { success: true, message: 'Expense entry deleted' });
     }
 
+    // API: UPDATE EXPENSE
+    if (pathname.startsWith('/api/expenses/') && req.method === 'PUT') {
+      const id = parseInt(pathname.split('/')[3], 10);
+      const body = await parseJsonBody(req);
+      const cur = db.prepare('SELECT * FROM expenses_ledger WHERE id = ?').get(id);
+      if (!cur) return sendJson(res, 404, { success: false, error: 'Expense not found' });
+      const date = body.expense_date || cur.expense_date;
+      db.prepare('UPDATE expenses_ledger SET expense_date = ?, month_key = ?, site_id = ?, category = ?, title = ?, amount = ? WHERE id = ?').run(
+        date,
+        date.slice(0, 7),
+        body.site_id !== undefined ? (body.site_id ? parseInt(body.site_id, 10) : null) : cur.site_id,
+        body.category !== undefined ? body.category : cur.category,
+        body.title !== undefined ? String(body.title).trim() : cur.title,
+        body.amount !== undefined ? parseFloat(body.amount) || 0 : cur.amount,
+        id
+      );
+      autoBackup();
+      return sendJson(res, 200, { success: true, message: 'Expense updated' });
+    }
+
+    // API: INCOME ENTRIES (product / custom income ledger)
+    if (pathname === '/api/income' && req.method === 'GET') {
+      const entries = db.prepare(`
+        SELECT i.*, COALESCE(s.site_name, s.site_url, '') as site_name
+        FROM income_entries i
+        LEFT JOIN sites s ON i.site_id = s.id
+        ORDER BY i.income_date DESC, i.id DESC
+      `).all();
+      const totalAmount = entries.reduce((acc, x) => acc + (x.amount || 0), 0);
+      return sendJson(res, 200, { success: true, count: entries.length, totalAmount, entries });
+    }
+
+    if (pathname === '/api/income' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const title = (body.title || '').trim();
+      const product = (body.product || '').trim();
+      if (!title || !product || body.amount === undefined || body.amount === '') {
+        return sendJson(res, 400, { success: false, error: 'product, title and amount are required' });
+      }
+      const incomeDate = body.income_date || new Date().toISOString().slice(0, 10);
+      const r = db.prepare('INSERT INTO income_entries (income_date, month_key, product, site_id, title, description, amount) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+        incomeDate, incomeDate.slice(0, 7), product, body.site_id ? parseInt(body.site_id, 10) : null, title, (body.description || '').trim(), parseFloat(body.amount) || 0
+      );
+      autoBackup();
+      return sendJson(res, 201, { success: true, incomeId: r.lastInsertRowid, message: 'Income entry added' });
+    }
+
+    if (pathname.startsWith('/api/income/') && req.method === 'PUT') {
+      const id = parseInt(pathname.split('/')[3], 10);
+      const body = await parseJsonBody(req);
+      const cur = db.prepare('SELECT * FROM income_entries WHERE id = ?').get(id);
+      if (!cur) return sendJson(res, 404, { success: false, error: 'Income entry not found' });
+      const date = body.income_date || cur.income_date;
+      db.prepare("UPDATE income_entries SET income_date = ?, month_key = ?, product = ?, site_id = ?, title = ?, description = ?, amount = ?, updated_at = datetime('now') WHERE id = ?").run(
+        date,
+        date.slice(0, 7),
+        body.product !== undefined ? String(body.product).trim() : cur.product,
+        body.site_id !== undefined ? (body.site_id ? parseInt(body.site_id, 10) : null) : cur.site_id,
+        body.title !== undefined ? String(body.title).trim() : cur.title,
+        body.description !== undefined ? String(body.description).trim() : cur.description,
+        body.amount !== undefined ? parseFloat(body.amount) || 0 : cur.amount,
+        id
+      );
+      autoBackup();
+      return sendJson(res, 200, { success: true, message: 'Income entry updated' });
+    }
+
+    if (pathname.startsWith('/api/income/') && req.method === 'DELETE') {
+      const id = parseInt(pathname.split('/')[3], 10);
+      db.prepare('DELETE FROM income_entries WHERE id = ?').run(id);
+      autoBackup();
+      return sendJson(res, 200, { success: true, message: 'Income entry removed' });
+    }
+
     // API: CSV EXPORT
     if (pathname === '/api/export/csv' && req.method === 'GET') {
       const type = parsedUrl.searchParams.get('type') || 'sites';
@@ -823,6 +884,18 @@ const server = http.createServer(async (req, res) => {
           'Content-Disposition': `attachment; filename="writerify_portfolio_${monthKey}.csv"`
         });
         return res.end(csv);
+      } else if (type === 'income') {
+        const entries = db.prepare('SELECT * FROM income_entries ORDER BY income_date DESC, id DESC').all();
+        const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        let csv = 'ID,Date,Product,Site ID,Title,Description,Amount\n';
+        for (const e of entries) {
+          csv += [q(e.id), q(e.income_date), q(e.product), q(e.site_id || ''), q(e.title), q(e.description), (e.amount || 0).toFixed(2)].join(',') + '\n';
+        }
+        res.writeHead(200, {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="writerify_income_ledger.csv"`
+        });
+        return res.end(csv);
       } else {
         const expenses = db.prepare(`
           SELECT e.*, s.site_name
@@ -850,6 +923,7 @@ const server = http.createServer(async (req, res) => {
       const metrics = db.prepare('SELECT * FROM monthly_site_metrics').all();
       const expenses = db.prepare('SELECT * FROM expenses_ledger').all();
       const settings = db.prepare('SELECT * FROM settings').all();
+      const income = db.prepare('SELECT * FROM income_entries').all();
 
       const dump = {
         app: 'Writerify Finance Command Center',
@@ -858,7 +932,8 @@ const server = http.createServer(async (req, res) => {
         settings,
         sites,
         metrics,
-        expenses
+        expenses,
+        income
       };
 
       res.writeHead(200, {
@@ -888,6 +963,7 @@ const server = http.createServer(async (req, res) => {
         // Restore sites
         db.prepare('DELETE FROM monthly_site_metrics').run();
         db.prepare('DELETE FROM expenses_ledger').run();
+        db.prepare('DELETE FROM income_entries').run();
         db.prepare('DELETE FROM sites').run();
 
         const insertSite = db.prepare(`
@@ -917,6 +993,17 @@ const server = http.createServer(async (req, res) => {
           `);
           for (const e of body.expenses) {
             insertExp.run(e.expense_date, e.month_key, e.site_id || null, e.category, e.title, e.amount, e.receipt_url || '', e.created_at || new Date().toISOString());
+          }
+        }
+
+        // Restore product income entries
+        if (body.income && Array.isArray(body.income)) {
+          const insertInc = db.prepare(`
+            INSERT INTO income_entries (id, income_date, month_key, product, site_id, title, description, amount, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const i of body.income) {
+            insertInc.run(i.id, i.income_date, i.month_key || String(i.income_date).slice(0, 7), i.product, i.site_id || null, i.title, i.description || '', i.amount || 0, i.created_at || new Date().toISOString(), i.updated_at || new Date().toISOString());
           }
         }
 
