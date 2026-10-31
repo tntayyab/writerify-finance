@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4.0">
+  <link rel="stylesheet" href="styles.css?v=4.1">
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -279,6 +279,7 @@
                   <select id="incomeSiteFilter" class="select select-sm"></select>
                   <span class="grow"></span>
                   <button id="exportIncomeCsvBtn2" class="btn btn-ghost btn-sm"><i data-ic="download" data-cls="sm"></i><span class="btn-label">Export</span></button>
+                  <button id="openAddProductBtn" class="btn btn-ghost btn-sm"><i data-ic="plus" data-cls="sm"></i>New product</button>
                   <button id="openAddIncomeModalBtn" class="btn btn-income btn-sm"><i data-ic="plus" data-cls="sm"></i>Add income</button>
                 </div>
                 <div class="filter-row"><div class="period" id="incomePeriod"></div></div>
@@ -398,14 +399,42 @@
               <select id="incomeProduct" class="select"></select>
               <input type="text" id="incomeProductOther" class="input hidden" placeholder="Custom product name…">
             </div>
-            <div class="field full"><label>Site (optional)</label><select id="incomeSite" class="select"></select></div>
+            <div class="field"><label>Plan</label>
+              <select id="incomePlan" class="select"><option value="">No plan</option><option>Starter</option><option>Growth</option><option>Max</option></select>
+            </div>
+            <div class="field"><label>Site (optional)</label><select id="incomeSite" class="select"></select></div>
             <div class="field full"><label>Title *</label><input type="text" id="incomeTitle" class="input" placeholder="e.g. October affiliate payout" required maxlength="140"></div>
             <div class="field full"><label>Description</label><textarea id="incomeDescription" class="textarea" placeholder="Notes, payout source, invoice reference…"></textarea></div>
-            <div class="field full"><label>Amount (USD) *</label><div class="amount-field"><span>$</span><input type="number" id="incomeAmount" class="input" step="0.01" min="0" placeholder="0.00" required></div></div>
+            <div class="form-section full">
+              <div class="pricing-head"><span class="label">Pricing</span><span class="rate-hint" id="incomeRateHint">1 USD = 120 BDT</span></div>
+              <div class="form-grid">
+                <div class="field"><label>Amount (USD) *</label><div class="amount-field"><span>$</span><input type="number" id="incomeAmount" class="input" step="0.01" min="0" placeholder="0.00" required></div></div>
+                <div class="field"><label>Amount (BDT)</label><div class="amount-field"><span>৳</span><input type="number" id="incomeAmountBdt" class="input" step="0.01" min="0" placeholder="0.00"></div></div>
+                <div class="field full"><label>Exchange rate · BDT per 1 USD</label><input type="number" id="incomeRate" class="input" step="0.01" min="0.01" value="120"></div>
+              </div>
+            </div>
           </div>
           <div class="modal-foot">
             <button type="button" class="btn btn-ghost close-modal">Cancel</button>
             <button type="submit" class="btn btn-income" id="incomeSubmitBtn">Save income</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- New product -->
+    <div id="productModal" class="modal-backdrop hidden" style="z-index:250">
+      <div class="modal-box sm">
+        <div class="modal-head">
+          <span class="m-ic stat-ic brand"><i data-ic="star"></i></span>
+          <h3>Add new product<small>It will appear in every product list &amp; filter</small></h3>
+          <button type="button" class="icon-btn close-modal"><i data-ic="x" data-cls="sm"></i></button>
+        </div>
+        <form id="productForm">
+          <div class="field"><label>Product name *</label><input type="text" id="productName" class="input" placeholder="e.g. Pinterify Pro" maxlength="60" required></div>
+          <div class="modal-foot">
+            <button type="button" class="btn btn-ghost close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Add product</button>
           </div>
         </form>
       </div>
@@ -473,6 +502,6 @@
     <linearGradient id="gradBrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8272ff"/><stop offset="100%" stop-color="#f472b6"/></linearGradient>
   </defs></svg>
 
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=4.1"></script>
 </body>
 </html>

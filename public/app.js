@@ -40,9 +40,15 @@
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
   amount NUMERIC NOT NULL DEFAULT 0,
+  plan TEXT DEFAULT '',
+  amount_bdt NUMERIC DEFAULT 0,
+  exchange_rate NUMERIC DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE income_entries ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT '';
+ALTER TABLE income_entries ADD COLUMN IF NOT EXISTS amount_bdt NUMERIC DEFAULT 0;
+ALTER TABLE income_entries ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_income_entries_date ON income_entries (income_date DESC);
 CREATE INDEX IF NOT EXISTS idx_income_entries_month ON income_entries (month_key);
 CREATE INDEX IF NOT EXISTS idx_income_entries_product ON income_entries (product);
@@ -93,6 +99,12 @@ NOTIFY pgrst, 'reload schema';`;
     const s = a >= 1e6 ? (a / 1e6).toFixed(1) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(a >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k' : String(Math.round(a));
     return (n < 0 ? '-$' : '$') + s;
   }
+
+  function bdt(n) {
+    return '৳' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // BDT total: stored BDT when present, otherwise converted at the current rate
+  const bdtOf = (rows) => rows.reduce((a, e) => a + (e.amount_bdt || e.amount * state.rate), 0);
 
   function plural(n, one, many) { return `${n} ${n === 1 ? one : (many || one + 's')}`; }
 
@@ -189,6 +201,8 @@ NOTIFY pgrst, 'reload schema';`;
     sitesEditable: true,
     income: [],
     incomeSetupRequired: false,
+    products: [],
+    rate: parseFloat(localStorage.getItem('wf_usd_bdt')) || 120,
     expenses: [],
     statusFilter: 'running',
     siteSearch: '',
@@ -631,7 +645,9 @@ NOTIFY pgrst, 'reload schema';`;
   async function loadIncome() {
     const data = await apiFetch('/api/income');
     if (!data || !data.success) return;
-    state.income = (data.entries || []).map((e) => ({ ...e, product: canonicalProduct(e.product), amount: num(e.amount) }));
+    const prod = await apiFetch('/api/products');
+    state.products = prod && prod.success ? (prod.products || []).map(canonicalProduct) : [];
+    state.income = (data.entries || []).map((e) => ({ ...e, product: canonicalProduct(e.product), amount: num(e.amount), amount_bdt: num(e.amount_bdt), plan: e.plan || '' }));
     state.incomeSetupRequired = !!data.setupRequired;
     $('incomeSetup').classList.toggle('hidden', !state.incomeSetupRequired);
     if (state.incomeSetupRequired) $('incomeSetupSql').textContent = INCOME_SETUP_SQL;
@@ -871,7 +887,7 @@ NOTIFY pgrst, 'reload schema';`;
       if (!map.has(key)) map.set(key, { name, total: 0, count: 0, sites: new Set() });
       return map.get(key);
     };
-    if (includePresets) PRODUCT_PRESETS.forEach(touch);
+    if (includePresets) { PRODUCT_PRESETS.forEach(touch); state.products.forEach(touch); }
     entries.forEach((e) => {
       const p = touch(e.product || 'Uncategorized');
       p.total += e.amount;
@@ -1087,17 +1103,17 @@ NOTIFY pgrst, 'reload schema';`;
       return `<tr>
         <td class="cell-idx">${i + 1}</td>
         <td style="white-space:nowrap;font-weight:600">${esc(prettyDate(e.income_date))}</td>
-        <td>${productTag(e.product)}</td>
+        <td>${productTag(e.product)}${e.plan ? `<span class="plan-badge ${esc(e.plan.toLowerCase())}">${esc(e.plan)}</span>` : ''}</td>
         <td>${e.site_name ? `<span class="meta-chip">${ic('globe', 'xs')}${esc(e.site_name)}</span>` : '<span class="text-muted">—</span>'}</td>
         <td><div class="cell-main">${esc(e.title)}</div>${e.description ? `<div class="cell-sub" title="${esc(e.description)}">${esc(e.description)}</div>` : ''}</td>
-        <td class="amount in">${money2(e.amount)}</td>
+        <td class="amount in">${money2(e.amount)}${e.amount_bdt ? `<span class="bdt">${bdt(e.amount_bdt)}</span>` : ''}</td>
         <td><div class="cell-actions">
           <button class="icon-btn" data-act="edit" data-id="${e.id}" title="Edit">${ic('edit', 'sm')}</button>
           <button class="icon-btn danger" data-act="delete" data-id="${e.id}" title="Delete">${ic('trash', 'sm')}</button>
         </div></td></tr>`;
     },
     foot(rows) {
-      return `<tr class="tfoot-total"><td></td><td colspan="4">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-good">${money2(rows.reduce((a, e) => a + e.amount, 0))}</td><td></td></tr>`;
+      return `<tr class="tfoot-total"><td></td><td colspan="4">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-good">${money2(rows.reduce((a, e) => a + e.amount, 0))}<span class="bdt">${bdt(bdtOf(rows))}</span></td><td></td></tr>`;
     },
     empty() {
       if (state.incomeSetupRequired) return `<div class="empty"><div class="empty-ic">${ic('database', 'lg')}</div><h4>Almost there</h4><p>Run the one-time SQL shown above in Supabase, then reload.</p></div>`;
@@ -1120,6 +1136,7 @@ NOTIFY pgrst, 'reload schema';`;
   function productList() {
     const names = new Map();
     PRODUCT_PRESETS.forEach((p) => names.set(p.toLowerCase(), p));
+    state.products.forEach((p) => { if (!names.has(p.toLowerCase())) names.set(p.toLowerCase(), p); });
     state.income.forEach((e) => { if (e.product && !names.has(e.product.toLowerCase())) names.set(e.product.toLowerCase(), e.product); });
     return [...names.values()];
   }
@@ -1152,7 +1169,7 @@ NOTIFY pgrst, 'reload schema';`;
     const untagged = rows.filter((e) => !e.site_id).length;
 
     $('incTotal').textContent = money2(total);
-    $('incRangeLabel').textContent = incomePeriod.describe();
+    $('incRangeLabel').textContent = `${bdt(bdtOf(rows))} · ${incomePeriod.describe()}`;
     $('incCount').textContent = rows.length.toLocaleString();
     $('incAvg').textContent = `Avg ${money2(rows.length ? total / rows.length : 0)} / entry`;
     $('incSites').textContent = sites.size.toLocaleString();
@@ -1185,7 +1202,7 @@ NOTIFY pgrst, 'reload schema';`;
 
   function openIncomeModal(entry) {
     const sel = $('incomeProduct');
-    sel.innerHTML = productList().map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('') + '<option value="__other">Other (custom product)…</option>';
+    sel.innerHTML = productList().map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('') + '<option value="__other">＋ Add new product…</option>';
     $('incomeForm').reset();
     $('incomeId').value = entry ? entry.id : '';
     $('incomeDate').value = entry ? entry.income_date : todayStr();
@@ -1194,6 +1211,11 @@ NOTIFY pgrst, 'reload schema';`;
     $('incomeTitle').value = entry ? entry.title : '';
     $('incomeDescription').value = entry ? (entry.description || '') : '';
     $('incomeAmount').value = entry ? entry.amount : '';
+    $('incomePlan').value = entry ? (entry.plan || '') : '';
+    const rate = entry && entry.exchange_rate ? entry.exchange_rate : state.rate;
+    $('incomeRate').value = rate;
+    $('incomeAmountBdt').value = entry ? (entry.amount_bdt || (entry.amount * rate).toFixed(2)) : '';
+    updateRateHint();
     setModalTitle('incomeModal', entry ? 'Edit income' : 'Add income');
     $('incomeSubmitBtn').textContent = entry ? 'Save changes' : 'Save income';
     openModal('incomeModal');
@@ -1507,8 +1529,13 @@ NOTIFY pgrst, 'reload schema';`;
         site_id: $('incomeSite').value || null,
         title: $('incomeTitle').value.trim(),
         description: $('incomeDescription').value.trim(),
-        amount: parseFloat($('incomeAmount').value)
+        amount: parseFloat($('incomeAmount').value),
+        plan: $('incomePlan').value,
+        amount_bdt: parseFloat($('incomeAmountBdt').value) || 0,
+        exchange_rate: parseFloat($('incomeRate').value) || state.rate
       };
+      // A brand-new product is registered so it stays in every list, even before it earns
+      if ($('incomeProduct').value === '__other') await registerProduct(payload.product);
       const btn = $('incomeSubmitBtn');
       btn.disabled = true;
       const res = await apiFetch(id ? `/api/income/${id}` : '/api/income', { method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) });
@@ -1521,6 +1548,35 @@ NOTIFY pgrst, 'reload schema';`;
       closeAllModals();
       await Promise.all([loadIncome(), loadSummary(), loadSites()]);
       renderOverviewProducts();
+    });
+
+    // USD <-> BDT live conversion
+    const usd = $('incomeAmount');
+    const bdtEl = $('incomeAmountBdt');
+    const rateEl = $('incomeRate');
+    const rate = () => parseFloat(rateEl.value) || state.rate;
+    usd.addEventListener('input', () => { bdtEl.value = usd.value === '' ? '' : (parseFloat(usd.value) * rate()).toFixed(2); });
+    bdtEl.addEventListener('input', () => { usd.value = bdtEl.value === '' ? '' : (parseFloat(bdtEl.value) / rate()).toFixed(2); });
+    rateEl.addEventListener('input', () => {
+      const r = parseFloat(rateEl.value);
+      if (r > 0) { state.rate = r; try { localStorage.setItem('wf_usd_bdt', String(r)); } catch (_) { /* ignore */ } }
+      if (usd.value !== '') bdtEl.value = (parseFloat(usd.value) * rate()).toFixed(2);
+      updateRateHint();
+    });
+
+    // New product modal
+    $('openAddProductBtn').addEventListener('click', () => { $('productForm').reset(); openModal('productModal'); $('productName').focus(); });
+    $('productForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = $('productName').value.trim();
+      if (!name) return;
+      if (await registerProduct(name)) {
+        closeModal('productModal');
+        showToast('Product “' + canonicalProduct(name) + '” added ✓');
+        fillIncomeFilters();
+        renderIncomeSection();
+        renderOverviewProducts();
+      }
     });
 
     // Expense form
@@ -1564,6 +1620,19 @@ NOTIFY pgrst, 'reload schema';`;
       };
       reader.readAsText(file);
     });
+  }
+
+  function updateRateHint() {
+    $('incomeRateHint').textContent = '1 USD = ' + (parseFloat($('incomeRate').value) || state.rate) + ' BDT';
+  }
+
+  async function registerProduct(name) {
+    const clean = canonicalProduct(name);
+    if (productList().some((p) => p.toLowerCase() === clean.toLowerCase())) return true;
+    const res = await apiFetch('/api/products', { method: 'POST', body: JSON.stringify({ name: clean }) });
+    if (!res.success) return false;
+    state.products = (res.products || []).map(canonicalProduct);
+    return true;
   }
 
   function debounceInput(el, fn, ms = 200) {

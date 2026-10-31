@@ -115,6 +115,11 @@ db.exec(`
   );
 `);
 
+// Income entries: plan + BDT columns on older databases
+for (const col of ["plan TEXT DEFAULT ''", 'amount_bdt REAL DEFAULT 0', 'exchange_rate REAL DEFAULT 0']) {
+  try { db.exec(`ALTER TABLE income_entries ADD COLUMN ${col}`); } catch { /* column already exists */ }
+}
+
 // Add site detail columns on databases created before they existed
 for (const col of ['domain_registrar', 'hosting_provider', 'domain_expiry', 'amazon_account', 'amazon_tracking_id']) {
   try { db.exec(`ALTER TABLE sites ADD COLUMN ${col} TEXT DEFAULT ''`); } catch { /* column already exists */ }
@@ -794,6 +799,25 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       return sendJson(res, 200, { success: true, message: 'Expense updated' });
     }
 
+    // API: REGISTERED PRODUCTS (stored in settings)
+    if (pathname === '/api/products' && req.method === 'GET') {
+      let products = [];
+      try { products = JSON.parse(getSetting('custom_products', '[]')); } catch { products = []; }
+      return sendJson(res, 200, { success: true, products });
+    }
+
+    if (pathname === '/api/products' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const name = String(body.name || '').trim().slice(0, 60);
+      if (!name) return sendJson(res, 400, { success: false, error: 'Product name is required' });
+      let products = [];
+      try { products = JSON.parse(getSetting('custom_products', '[]')); } catch { products = []; }
+      if (!products.some((p) => p.toLowerCase() === name.toLowerCase())) products.push(name);
+      setSetting('custom_products', JSON.stringify(products));
+      autoBackup();
+      return sendJson(res, 200, { success: true, products });
+    }
+
     // API: INCOME ENTRIES (product / custom income ledger)
     if (pathname === '/api/income' && req.method === 'GET') {
       const entries = db.prepare(`
@@ -814,8 +838,9 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         return sendJson(res, 400, { success: false, error: 'product, title and amount are required' });
       }
       const incomeDate = body.income_date || new Date().toISOString().slice(0, 10);
-      const r = db.prepare('INSERT INTO income_entries (income_date, month_key, product, site_id, title, description, amount) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-        incomeDate, incomeDate.slice(0, 7), product, body.site_id ? parseInt(body.site_id, 10) : null, title, (body.description || '').trim(), parseFloat(body.amount) || 0
+      const r = db.prepare('INSERT INTO income_entries (income_date, month_key, product, site_id, title, description, amount, plan, amount_bdt, exchange_rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        incomeDate, incomeDate.slice(0, 7), product, body.site_id ? parseInt(body.site_id, 10) : null, title, (body.description || '').trim(), parseFloat(body.amount) || 0,
+        (body.plan || '').trim(), parseFloat(body.amount_bdt) || 0, parseFloat(body.exchange_rate) || 0
       );
       autoBackup();
       return sendJson(res, 201, { success: true, incomeId: r.lastInsertRowid, message: 'Income entry added' });
@@ -827,7 +852,7 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       const cur = db.prepare('SELECT * FROM income_entries WHERE id = ?').get(id);
       if (!cur) return sendJson(res, 404, { success: false, error: 'Income entry not found' });
       const date = body.income_date || cur.income_date;
-      db.prepare("UPDATE income_entries SET income_date = ?, month_key = ?, product = ?, site_id = ?, title = ?, description = ?, amount = ?, updated_at = datetime('now') WHERE id = ?").run(
+      db.prepare("UPDATE income_entries SET income_date = ?, month_key = ?, product = ?, site_id = ?, title = ?, description = ?, amount = ?, plan = ?, amount_bdt = ?, exchange_rate = ?, updated_at = datetime('now') WHERE id = ?").run(
         date,
         date.slice(0, 7),
         body.product !== undefined ? String(body.product).trim() : cur.product,
@@ -835,6 +860,9 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         body.title !== undefined ? String(body.title).trim() : cur.title,
         body.description !== undefined ? String(body.description).trim() : cur.description,
         body.amount !== undefined ? parseFloat(body.amount) || 0 : cur.amount,
+        body.plan !== undefined ? String(body.plan).trim() : cur.plan,
+        body.amount_bdt !== undefined ? parseFloat(body.amount_bdt) || 0 : cur.amount_bdt,
+        body.exchange_rate !== undefined ? parseFloat(body.exchange_rate) || 0 : cur.exchange_rate,
         id
       );
       autoBackup();
@@ -999,11 +1027,11 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         // Restore product income entries
         if (body.income && Array.isArray(body.income)) {
           const insertInc = db.prepare(`
-            INSERT INTO income_entries (id, income_date, month_key, product, site_id, title, description, amount, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO income_entries (id, income_date, month_key, product, site_id, title, description, amount, plan, amount_bdt, exchange_rate, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `);
           for (const i of body.income) {
-            insertInc.run(i.id, i.income_date, i.month_key || String(i.income_date).slice(0, 7), i.product, i.site_id || null, i.title, i.description || '', i.amount || 0, i.created_at || new Date().toISOString(), i.updated_at || new Date().toISOString());
+            insertInc.run(i.id, i.income_date, i.month_key || String(i.income_date).slice(0, 7), i.product, i.site_id || null, i.title, i.description || '', i.amount || 0, i.plan || '', i.amount_bdt || 0, i.exchange_rate || 0, i.created_at || new Date().toISOString(), i.updated_at || new Date().toISOString());
           }
         }
 

@@ -98,6 +98,19 @@ function isMissingTable(err) {
   return msg.includes('PGRST205') || msg.includes('42P01') || /does not exist|schema cache/i.test(msg);
 }
 
+// Columns added after the first income migration: retry without them if the DB has not been migrated yet
+const INCOME_OPTIONAL_COLS = ['plan', 'amount_bdt', 'exchange_rate'];
+async function incomeWrite(env, endpoint, method, payload, headers = {}) {
+  try {
+    return await sbFetch(env, endpoint, { method, headers, body: JSON.stringify(payload) });
+  } catch (err) {
+    if (!/PGRST204|column/i.test(String(err.message))) throw err;
+    const slim = { ...payload };
+    INCOME_OPTIONAL_COLS.forEach((c) => delete slim[c]);
+    return await sbFetch(env, endpoint, { method, headers, body: JSON.stringify(slim) });
+  }
+}
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -678,6 +691,30 @@ export async function onRequest(context) {
     // ==========================================
     // INCOME ENTRIES (product / custom income ledger)
     // ==========================================
+    // Registered products (so a new product can be added before it earns anything)
+    if (pathname === '/api/products' && method === 'GET') {
+      const rows = await sbFetch(env, '/settings?select=*&key=eq.custom_products').catch(() => []);
+      let products = [];
+      try { products = JSON.parse((rows && rows[0] && rows[0].value) || '[]'); } catch { products = []; }
+      return jsonResponse({ success: true, products });
+    }
+
+    if (pathname === '/api/products' && method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const name = String(body.name || '').trim().slice(0, 60);
+      if (!name) return jsonResponse({ success: false, error: 'Product name is required' }, 400);
+      const rows = await sbFetch(env, '/settings?select=*&key=eq.custom_products').catch(() => []);
+      let products = [];
+      try { products = JSON.parse((rows && rows[0] && rows[0].value) || '[]'); } catch { products = []; }
+      if (!products.some((p) => p.toLowerCase() === name.toLowerCase())) products.push(name);
+      await sbFetch(env, '/settings?on_conflict=key', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({ key: 'custom_products', value: JSON.stringify(products) })
+      });
+      return jsonResponse({ success: true, products });
+    }
+
     if (pathname === '/api/income' && method === 'GET') {
       try {
         const [entries, sites] = await Promise.all([
@@ -709,19 +746,18 @@ export async function onRequest(context) {
       }
       const incomeDate = body.income_date || new Date().toISOString().slice(0, 10);
       try {
-        const created = await sbFetch(env, '/income_entries', {
-          method: 'POST',
-          headers: { 'Prefer': 'return=representation' },
-          body: JSON.stringify({
-            income_date: incomeDate,
-            month_key: incomeDate.slice(0, 7),
-            product,
-            site_id: body.site_id ? parseInt(body.site_id, 10) : null,
-            title,
-            description: (body.description || '').trim(),
-            amount: parseFloat(body.amount) || 0
-          })
-        });
+        const created = await incomeWrite(env, '/income_entries', 'POST', {
+          income_date: incomeDate,
+          month_key: incomeDate.slice(0, 7),
+          product,
+          site_id: body.site_id ? parseInt(body.site_id, 10) : null,
+          title,
+          description: (body.description || '').trim(),
+          amount: parseFloat(body.amount) || 0,
+          plan: (body.plan || '').trim(),
+          amount_bdt: parseFloat(body.amount_bdt) || 0,
+          exchange_rate: parseFloat(body.exchange_rate) || 0
+        }, { 'Prefer': 'return=representation' });
         const item = Array.isArray(created) ? created[0] : created;
         return jsonResponse({ success: true, incomeId: item ? item.id : null, message: 'Income entry added' }, 201);
       } catch (err) {
@@ -742,10 +778,10 @@ export async function onRequest(context) {
       if (body.title !== undefined) updates.title = String(body.title).trim();
       if (body.description !== undefined) updates.description = String(body.description).trim();
       if (body.amount !== undefined) updates.amount = parseFloat(body.amount) || 0;
-      await sbFetch(env, `/income_entries?id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates)
-      });
+      if (body.plan !== undefined) updates.plan = String(body.plan).trim();
+      if (body.amount_bdt !== undefined) updates.amount_bdt = parseFloat(body.amount_bdt) || 0;
+      if (body.exchange_rate !== undefined) updates.exchange_rate = parseFloat(body.exchange_rate) || 0;
+      await incomeWrite(env, `/income_entries?id=eq.${encodeURIComponent(id)}`, 'PATCH', updates);
       return jsonResponse({ success: true, message: 'Income entry updated' });
     }
 

@@ -13,9 +13,17 @@ CREATE TABLE IF NOT EXISTS income_entries (
   title TEXT NOT NULL,
   description TEXT DEFAULT '',
   amount NUMERIC NOT NULL DEFAULT 0,
+  plan TEXT DEFAULT '',                     -- Starter / Growth / Max
+  amount_bdt NUMERIC DEFAULT 0,             -- same income in Bangladeshi Taka
+  exchange_rate NUMERIC DEFAULT 0,          -- BDT per 1 USD used for this entry
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Existing installs: add the newer columns
+ALTER TABLE income_entries ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT '';
+ALTER TABLE income_entries ADD COLUMN IF NOT EXISTS amount_bdt NUMERIC DEFAULT 0;
+ALTER TABLE income_entries ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_income_entries_date ON income_entries (income_date DESC);
 CREATE INDEX IF NOT EXISTS idx_income_entries_month ON income_entries (month_key);
