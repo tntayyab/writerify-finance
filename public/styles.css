@@ -566,3 +566,5 @@ table.data tr.row-alert { background: var(--bad-soft); }
 /* Newly saved row */
 table.data tr.row-flash td { animation: flash 2.2s ease-out; }
 @keyframes flash { 0%, 40% { background: var(--good-soft); } 100% { background: transparent; } }
+
+.plan-badge.monthly { background: var(--brand-soft); color: var(--brand); }
