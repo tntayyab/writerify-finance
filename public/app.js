@@ -422,6 +422,16 @@ NOTIFY pgrst, 'reload schema';`;
       range: () => resolveRange(preset, custom),
       preset: () => preset,
       refreshLabels: drawChips,
+      // Narrowest preset whose range contains the date (falls back to lifetime)
+      bestPresetFor(dateStr) {
+        const order = ['this_month', 'last_month', 'this_year', 'last_year'];
+        return order.find((p) => presets.includes(p) && (() => { const r = resolveRange(p, custom); return dateStr >= r.from && dateStr <= r.to; })()) || 'lifetime';
+      },
+      setPreset(p) {
+        preset = p;
+        try { if (storageKey) localStorage.setItem(storageKey, preset); } catch (_) { /* ignore */ }
+        drawChips();
+      },
       describe() {
         const r = resolveRange(preset, custom);
         if (preset === 'lifetime') return 'All time';
@@ -566,6 +576,16 @@ NOTIFY pgrst, 'reload schema';`;
       render,
       renderFoot,
       resetPage() { st.page = 1; },
+      // Jump to the page that contains the row matching pred, then highlight it
+      reveal(pred, rowId) {
+        const idx = sortRows(cfg.getRows()).findIndex(pred);
+        if (idx < 0) return;
+        const perPage = st.size === 0 ? Infinity : st.size;
+        st.page = Math.floor(idx / perPage) + 1;
+        render();
+        const tr = tbody.querySelector('tr[data-row-id="' + rowId + '"]');
+        if (tr) { tr.classList.add('row-flash'); tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      },
       rows: () => st.sorted,
       body: tbody
     };
@@ -1063,7 +1083,7 @@ NOTIFY pgrst, 'reload schema';`;
      ===================================================================== */
   const incomePeriod = createPeriod($('incomePeriod'), {
     presets: ['this_month', 'last_month', 'last_30', 'this_year', 'last_year', 'lifetime', 'custom'],
-    defaultPreset: 'this_month',
+    defaultPreset: 'lifetime',
     storageKey: 'wf_period_income',
     onChange: () => { incomeTable.resetPage(); renderIncomeSection(); }
   });
@@ -1097,7 +1117,7 @@ NOTIFY pgrst, 'reload schema';`;
       { key: 'act', label: '', align: 'right', width: '84px' }
     ],
     row(e, i) {
-      return `<tr>
+      return `<tr data-row-id="${e.id}">
         <td class="cell-idx">${i + 1}</td>
         <td style="white-space:nowrap;font-weight:600">${esc(prettyDate(e.income_date))}</td>
         <td>${productTag(e.product)}${e.plan ? `<span class="plan-badge ${esc(e.plan.toLowerCase())}">${esc(e.plan)}</span>` : ''}</td>
@@ -1542,9 +1562,17 @@ NOTIFY pgrst, 'reload schema';`;
         return;
       }
       showToast(id ? 'Income updated ✓' : 'Income recorded ✓');
+      // Make sure the entry is visible: widen the date range / clear filters that would hide it
+      if (!incomePeriod.match(payload.income_date)) { incomePeriod.setPreset(incomePeriod.bestPresetFor(payload.income_date)); }
+      if (state.incomeProduct && state.incomeProduct.toLowerCase() !== payload.product.toLowerCase()) { state.incomeProduct = ''; }
+      if (state.incomeSite && state.incomeSite !== String(payload.site_id || '')) { state.incomeSite = ''; }
+      if (state.incomeSearch) { state.incomeSearch = ''; $('incomeSearchInput').value = ''; }
+      incomeTable.resetPage();
       closeAllModals();
       await Promise.all([loadIncome(), loadSummary(), loadSites()]);
       renderOverviewProducts();
+      const savedId = String(id || res.incomeId || '');
+      if (savedId) incomeTable.reveal((e) => String(e.id) === savedId, savedId);
     });
 
     // USD <-> BDT live conversion
