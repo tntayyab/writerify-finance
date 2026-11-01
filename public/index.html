@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4.1">
+  <link rel="stylesheet" href="styles.css?v=4.2">
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -297,11 +297,36 @@
               <div class="stat"><div class="stat-top"><span class="stat-label">Biggest category</span><span class="stat-ic warn"><i data-ic="star" data-cls="sm"></i></span></div><div class="stat-val num" id="expTop" style="font-size:20px">—</div><div class="stat-foot"><span id="expTopFoot">&nbsp;</span></div></div>
             </div>
 
+            <div id="expSetup" class="notice hidden">
+              <i data-ic="alert"></i>
+              <div style="min-width:0;flex:1">
+                <h4>One-time setup: enable partner accounting</h4>
+                <p>Run this once in <b>Supabase → SQL Editor</b>, then reload. Until then "Paid by" and "Source of fund" cannot be saved. (File: <code>supabase_expense_partners_migration.sql</code>)</p>
+                <pre id="expSetupSql"></pre>
+                <button class="btn btn-ghost btn-sm" id="copyExpSqlBtn"><i data-ic="copy" data-cls="sm"></i>Copy SQL</button>
+              </div>
+            </div>
+
+            <div class="card card-pad" id="partnerCard">
+              <div class="card-head">
+                <div><div class="card-title">Partner accounts</div><div class="card-sub" id="psRange">—</div></div>
+              </div>
+              <div class="grid g-4 keep2">
+                <div class="stat"><div class="stat-top"><span class="stat-label">Company balance spent</span><span class="stat-ic brand"><i data-ic="wallet" data-cls="sm"></i></span></div><div class="stat-val num" id="psCompany">$0</div><div class="stat-foot"><span>paid from company funds</span></div></div>
+                <div class="stat hl-warn"><div class="stat-top"><span class="stat-label">Sazzad's own money</span><span class="stat-ic warn"><i data-ic="wallet" data-cls="sm"></i></span></div><div class="stat-val num" id="psSazzad">$0</div><div class="stat-foot"><span>personal balance used</span></div></div>
+                <div class="stat"><div class="stat-top"><span class="stat-label">Mustaqeem's own money</span><span class="stat-ic info"><i data-ic="wallet" data-cls="sm"></i></span></div><div class="stat-val num" id="psMustaqeem">$0</div><div class="stat-foot"><span>personal balance used</span></div></div>
+                <div class="stat"><div class="stat-top"><span class="stat-label">Paid by</span><span class="stat-ic good"><i data-ic="list" data-cls="sm"></i></span></div><div class="stat-val num" id="psPaidSazzad" style="font-size:18px">—</div><div class="stat-foot"><span id="psPaidMustaqeem">—</span></div></div>
+              </div>
+              <div class="settle" id="psSettle"></div>
+            </div>
+
             <div class="card">
               <div class="filter-bar">
                 <div class="filter-row">
                   <div class="search"><i data-ic="search" data-cls="sm"></i><input type="text" id="expenseSearchInput" class="input" placeholder="Search expense or site…"></div>
                   <select id="expenseCategoryFilter" class="select select-sm"></select>
+                  <select id="expensePaidFilter" class="select select-sm"></select>
+                  <select id="expenseFundFilter" class="select select-sm"></select>
                   <span class="grow"></span>
                   <button id="exportExpensesCsvBtn" class="btn btn-ghost btn-sm"><i data-ic="download" data-cls="sm"></i><span class="btn-label">Export</span></button>
                   <button id="openAddCostModalBtn" class="btn btn-primary btn-sm"><i data-ic="plus" data-cls="sm"></i>Add cost</button>
@@ -454,6 +479,8 @@
             <div class="field"><label>Date *</label><input type="date" id="costDate" class="input" required></div>
             <div class="field"><label>Category *</label><select id="costCategory" class="select" required></select></div>
             <div class="field full"><label>Description / title *</label><input type="text" id="costTitle" class="input" placeholder="e.g. Hetzner server renewal" required></div>
+            <div class="field"><label>Paid by *</label><select id="costPaidBy" class="select" required></select></div>
+            <div class="field"><label>Source of fund *</label><select id="costFundSource" class="select" required></select></div>
             <div class="field"><label>Amount (USD) *</label><div class="amount-field"><span>$</span><input type="number" id="costAmount" class="input" step="0.01" min="0.01" placeholder="0.00" required></div></div>
             <div class="field"><label>Associated site</label><select id="costSiteId" class="select"></select></div>
           </div>
@@ -502,6 +529,6 @@
     <linearGradient id="gradBrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8272ff"/><stop offset="100%" stop-color="#f472b6"/></linearGradient>
   </defs></svg>
 
-  <script src="app.js?v=4.1"></script>
+  <script src="app.js?v=4.2"></script>
 </body>
 </html>

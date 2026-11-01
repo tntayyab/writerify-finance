@@ -20,6 +20,10 @@
   };
   const REGISTRARS = ['Namecheap', 'ExonHost', 'GoDaddy', 'Cloudflare', 'Hostinger', 'Porkbun'];
   const HOSTS = ['Shared Hosting', 'VPS Server', 'ExonHost Shared', 'ExonHost VPS', 'Hetzner VPS', 'Contabo VPS', 'Cloudflare Pages', 'DigitalOcean'];
+  const PARTNERS = ['Mustaqeem', 'Sazzad'];
+  const FUND_SOURCES = { company: 'Company balance', sazzad: "Sazzad's personal", mustaqeem: "Mustaqeem's personal" };
+  const FUND_BADGE = { company: 'brand', sazzad: 'warn', mustaqeem: 'info' };
+  const EXPENSE_PARTNER_SQL = "ALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS paid_by TEXT DEFAULT '';\nALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS fund_source TEXT DEFAULT 'company';\nNOTIFY pgrst, 'reload schema';";
   const PAGE_SIZES = [10, 25, 50, 100, 0]; // 0 = All
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -211,6 +215,8 @@ NOTIFY pgrst, 'reload schema';`;
     incomeSite: '',
     expenseSearch: '',
     expenseCategory: '',
+    expensePaid: '',
+    expenseFund: '',
     listenersAttached: false
   };
 
@@ -1254,6 +1260,8 @@ NOTIFY pgrst, 'reload schema';`;
     return state.expenses.filter((e) => {
       if (!expensePeriod.match(e.expense_date)) return false;
       if (state.expenseCategory && e.category !== state.expenseCategory) return false;
+      if (state.expensePaid && e.paid_by !== state.expensePaid) return false;
+      if (state.expenseFund && (e.fund_source || 'company') !== state.expenseFund) return false;
       if (!q) return true;
       return [e.title, e.site_name, CATEGORIES[e.category], e.category].some((v) => String(v || '').toLowerCase().includes(q));
     });
@@ -1270,6 +1278,8 @@ NOTIFY pgrst, 'reload schema';`;
       { key: 'date', label: 'Date', sortable: true, firstDir: 'desc', sortValue: (e) => e.expense_date || '' },
       { key: 'category', label: 'Category', sortable: true, sortValue: (e) => CATEGORIES[e.category] || e.category },
       { key: 'title', label: 'Description', sortable: true, sortValue: (e) => e.title || '' },
+      { key: 'paid', label: 'Paid by', sortable: true, sortValue: (e) => e.paid_by || '' },
+      { key: 'fund', label: 'Source of fund', sortable: true, sortValue: (e) => FUND_SOURCES[e.fund_source || 'company'] || '' },
       { key: 'site', label: 'Site', sortable: true, sortValue: (e) => e.site_name || '' },
       { key: 'amount', label: 'Amount', align: 'right', sortable: true, firstDir: 'desc', sortValue: (e) => e.amount },
       { key: 'act', label: '', align: 'right', width: '84px' }
@@ -1280,6 +1290,8 @@ NOTIFY pgrst, 'reload schema';`;
         <td style="white-space:nowrap;font-weight:600">${esc(prettyDate(e.expense_date))}</td>
         <td><span class="badge">${esc(CATEGORIES[e.category] || e.category)}</span></td>
         <td class="cell-main">${esc(e.title)}</td>
+        <td>${e.paid_by ? `<span class="partner-pill ${esc(e.paid_by.toLowerCase())}"><i>${esc(e.paid_by[0])}</i>${esc(e.paid_by)}</span>` : '<span class="text-muted">—</span>'}</td>
+        <td><span class="badge ${FUND_BADGE[e.fund_source || 'company'] || ''}">${esc(FUND_SOURCES[e.fund_source || 'company'] || e.fund_source)}</span></td>
         <td class="text-muted">${esc(e.site_name || 'Global')}</td>
         <td class="amount out">${money2(e.amount)}</td>
         <td><div class="cell-actions">
@@ -1288,7 +1300,7 @@ NOTIFY pgrst, 'reload schema';`;
         </div></td></tr>`;
     },
     foot(rows) {
-      return `<tr class="tfoot-total"><td></td><td colspan="4">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-bad">${money2(rows.reduce((a, e) => a + e.amount, 0))}</td><td></td></tr>`;
+      return `<tr class="tfoot-total"><td></td><td colspan="6">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-bad">${money2(rows.reduce((a, e) => a + e.amount, 0))}</td><td></td></tr>`;
     },
     empty() {
       if (!state.expenses.length) return `<div class="empty"><div class="empty-ic">${ic('receipt', 'lg')}</div><h4>No expenses yet</h4><p>Log hosting, domains, writers, tools and team costs to see true profit.</p><button class="btn btn-primary btn-sm" onclick="document.getElementById('openAddCostModalBtn').click()">${ic('plus', 'sm')}Add your first cost</button></div>`;
@@ -1319,7 +1331,44 @@ NOTIFY pgrst, 'reload schema';`;
     const top = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
     $('expTop').textContent = top ? (CATEGORIES[top[0]] || top[0]) : '—';
     $('expTopFoot').textContent = top ? `${money2(top[1])} · ${total ? Math.round((top[1] / total) * 100) : 0}% of spend` : 'No spend in range';
+    renderPartnerSplit();
     expensesTable.render();
+  }
+
+  // Who funded what, and who owes whom (50/50 partners) for the selected date range
+  function renderPartnerSplit() {
+    const rows = state.expenses.filter((e) => expensePeriod.match(e.expense_date));
+    const sum = (f) => rows.filter(f).reduce((a, e) => a + e.amount, 0);
+    const fund = (e) => e.fund_source || 'company';
+    const company = sum((e) => fund(e) === 'company');
+    const sz = sum((e) => fund(e) === 'sazzad');
+    const mq = sum((e) => fund(e) === 'mustaqeem');
+    const paidSz = sum((e) => e.paid_by === 'Sazzad');
+    const paidMq = sum((e) => e.paid_by === 'Mustaqeem');
+
+    $('psRange').textContent = expensePeriod.describe() + ' · ' + plural(rows.length, 'expense');
+    $('psCompany').textContent = money2(company);
+    $('psSazzad').textContent = money2(sz);
+    $('psMustaqeem').textContent = money2(mq);
+    $('psPaidSazzad').textContent = 'Sazzad ' + money2(paidSz);
+    $('psPaidMustaqeem').textContent = 'Mustaqeem ' + money2(paidMq);
+
+    const diff = (sz - mq) / 2;
+    const box = $('psSettle');
+    if (Math.abs(diff) < 0.005) {
+      box.className = 'settle even';
+      box.innerHTML = sz || mq ? '<b>All settled between partners</b> — both used the same amount of personal money.' : 'No personal-money expenses in this range. Everything came from the company balance.';
+    } else {
+      const debtor = diff > 0 ? 'Mustaqeem' : 'Sazzad';
+      const creditor = diff > 0 ? 'Sazzad' : 'Mustaqeem';
+      box.className = 'settle owe';
+      box.innerHTML = '<b>' + debtor + ' owes ' + creditor + ' ' + money2(Math.abs(diff)) + '</b> to split personal spending 50/50.' +
+        '<small>Or reimburse from the company balance instead: Sazzad ' + money2(sz) + ' · Mustaqeem ' + money2(mq) + '</small>';
+    }
+
+    const sample = state.expenses[0];
+    $('expSetup').classList.toggle('hidden', !(state.partnerSetupNeeded || (sample && !('paid_by' in sample))));
+    $('expSetupSql').textContent = EXPENSE_PARTNER_SQL;
   }
 
   function openCostModal(e) {
@@ -1330,6 +1379,10 @@ NOTIFY pgrst, 'reload schema';`;
     $('costTitle').value = e ? e.title : '';
     $('costAmount').value = e ? e.amount : '';
     $('costSiteId').value = e && e.site_id ? String(e.site_id) : '';
+    let lastPayer = '';
+    try { lastPayer = localStorage.getItem('wf_last_payer') || ''; } catch (_) { /* ignore */ }
+    $('costPaidBy').value = e && e.paid_by ? e.paid_by : lastPayer;
+    $('costFundSource').value = e && e.fund_source ? e.fund_source : 'company';
     setModalTitle('costModal', e ? 'Edit expense' : 'Add expense');
     $('costSubmitBtn').textContent = e ? 'Save changes' : 'Save expense';
     openModal('costModal');
@@ -1469,6 +1522,15 @@ NOTIFY pgrst, 'reload schema';`;
     debounceInput($('expenseSearchInput'), (v) => { state.expenseSearch = v; expensesTable.resetPage(); renderExpensesSection(); });
     $('expenseCategoryFilter').innerHTML = '<option value="">All categories</option>' + Object.entries(CATEGORIES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
     $('expenseCategoryFilter').addEventListener('change', (e) => { state.expenseCategory = e.target.value; expensesTable.resetPage(); renderExpensesSection(); });
+    $('costPaidBy').innerHTML = '<option value="">Select partner…</option>' + PARTNERS.map((p) => '<option>' + p + '</option>').join('');
+    $('costFundSource').innerHTML = Object.entries(FUND_SOURCES).map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join('');
+    $('expensePaidFilter').innerHTML = '<option value="">Paid by: anyone</option>' + PARTNERS.map((p) => '<option>' + p + '</option>').join('');
+    $('expenseFundFilter').innerHTML = '<option value="">Any source of fund</option>' + Object.entries(FUND_SOURCES).map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join('');
+    $('expensePaidFilter').addEventListener('change', (e) => { state.expensePaid = e.target.value; expensesTable.resetPage(); renderExpensesSection(); });
+    $('expenseFundFilter').addEventListener('change', (e) => { state.expenseFund = e.target.value; expensesTable.resetPage(); renderExpensesSection(); });
+    $('copyExpSqlBtn').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(EXPENSE_PARTNER_SQL); showToast('SQL copied — paste it in Supabase'); } catch (_) { showToast('Copy failed', 'error'); }
+    });
     $('costCategory').innerHTML = Object.entries(CATEGORIES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
 
     // Targets
@@ -1613,11 +1675,19 @@ NOTIFY pgrst, 'reload schema';`;
         category: $('costCategory').value,
         title: $('costTitle').value.trim(),
         amount: parseFloat($('costAmount').value),
-        site_id: $('costSiteId').value || null
+        site_id: $('costSiteId').value || null,
+        paid_by: $('costPaidBy').value,
+        fund_source: $('costFundSource').value
       };
+      try { localStorage.setItem('wf_last_payer', payload.paid_by); } catch (_) { /* ignore */ }
       const res = await apiFetch(id ? `/api/expenses/${id}` : '/api/expenses', { method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) });
       if (!res.success) return;
-      showToast(id ? 'Expense updated ✓' : 'Expense recorded ✓');
+      if (res.partnerFieldsSaved === false) {
+        showToast('Saved, but “Paid by / Source” needs the one-time SQL setup (see Expenses page)', 'error');
+        state.partnerSetupNeeded = true;
+      } else {
+        showToast(id ? 'Expense updated ✓' : 'Expense recorded ✓');
+      }
       closeAllModals();
       await Promise.all([loadExpenses(), loadSummary()]);
     });

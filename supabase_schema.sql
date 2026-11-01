@@ -107,6 +107,10 @@ CREATE POLICY "Public access income_entries" ON income_entries FOR ALL USING (tr
 -- Make PostgREST pick up the new table immediately
 NOTIFY pgrst, 'reload schema';
 
+-- Partner accounting for expenses
+ALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS paid_by TEXT DEFAULT '';
+ALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS fund_source TEXT DEFAULT 'company';
+
 -- Insert Default Mission Targets
 INSERT INTO settings (key, value) VALUES
   ('goal_sites', '500'),

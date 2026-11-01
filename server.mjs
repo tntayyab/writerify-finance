@@ -120,6 +120,11 @@ for (const col of ["plan TEXT DEFAULT ''", 'amount_bdt REAL DEFAULT 0', 'exchang
   try { db.exec(`ALTER TABLE income_entries ADD COLUMN ${col}`); } catch { /* column already exists */ }
 }
 
+// Expenses: partner accounting columns
+for (const col of ["paid_by TEXT DEFAULT ''", "fund_source TEXT DEFAULT 'company'"]) {
+  try { db.exec(`ALTER TABLE expenses_ledger ADD COLUMN ${col}`); } catch { /* column already exists */ }
+}
+
 // Add site detail columns on databases created before they existed
 for (const col of ['domain_registrar', 'hosting_provider', 'domain_expiry', 'amazon_account', 'amazon_tracking_id']) {
   try { db.exec(`ALTER TABLE sites ADD COLUMN ${col} TEXT DEFAULT ''`); } catch { /* column already exists */ }
@@ -763,10 +768,10 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       const receipt_url = body.receipt_url || '';
 
       const stmt = db.prepare(`
-        INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url, paid_by, fund_source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      const resInsert = stmt.run(expense_date, month_key, site_id, category, title, parseFloat(amount), receipt_url);
+      const resInsert = stmt.run(expense_date, month_key, site_id, category, title, parseFloat(amount), receipt_url, (body.paid_by || '').trim(), (body.fund_source || 'company').trim());
 
       autoBackup();
       return sendJson(res, 201, { success: true, expenseId: resInsert.lastInsertRowid, message: 'Expense added to ledger' });
@@ -786,17 +791,19 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       const cur = db.prepare('SELECT * FROM expenses_ledger WHERE id = ?').get(id);
       if (!cur) return sendJson(res, 404, { success: false, error: 'Expense not found' });
       const date = body.expense_date || cur.expense_date;
-      db.prepare('UPDATE expenses_ledger SET expense_date = ?, month_key = ?, site_id = ?, category = ?, title = ?, amount = ? WHERE id = ?').run(
+      db.prepare('UPDATE expenses_ledger SET expense_date = ?, month_key = ?, site_id = ?, category = ?, title = ?, amount = ?, paid_by = ?, fund_source = ? WHERE id = ?').run(
         date,
         date.slice(0, 7),
         body.site_id !== undefined ? (body.site_id ? parseInt(body.site_id, 10) : null) : cur.site_id,
         body.category !== undefined ? body.category : cur.category,
         body.title !== undefined ? String(body.title).trim() : cur.title,
         body.amount !== undefined ? parseFloat(body.amount) || 0 : cur.amount,
+        body.paid_by !== undefined ? String(body.paid_by).trim() : cur.paid_by,
+        body.fund_source !== undefined ? String(body.fund_source).trim() : cur.fund_source,
         id
       );
       autoBackup();
-      return sendJson(res, 200, { success: true, message: 'Expense updated' });
+      return sendJson(res, 200, { success: true, partnerFieldsSaved: true, message: 'Expense updated' });
     }
 
     // API: REGISTERED PRODUCTS (stored in settings)
@@ -932,9 +939,9 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
           ORDER BY e.expense_date DESC
         `).all();
 
-        let csv = 'ID,Date,Month,Site Name,Category,Title,Amount (USD),Receipt URL\n';
+        let csv = 'ID,Date,Month,Site Name,Category,Title,Amount (USD),Receipt URL,Paid By,Fund Source\n';
         for (const e of expenses) {
-          csv += `"${e.id}","${e.expense_date}","${e.month_key}","${e.site_name || 'Global'}","${e.category}","${e.title.replace(/"/g, '""')}",${e.amount},"${e.receipt_url}"\n`;
+          csv += `"${e.id}","${e.expense_date}","${e.month_key}","${e.site_name || 'Global'}","${e.category}","${e.title.replace(/"/g, '""')}",${e.amount},"${e.receipt_url}","${e.paid_by || ''}","${e.fund_source || ''}"\n`;
         }
 
         res.writeHead(200, {
@@ -1016,11 +1023,11 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         // Restore expenses
         if (body.expenses && Array.isArray(body.expenses)) {
           const insertExp = db.prepare(`
-            INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url, created_at, paid_by, fund_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `);
           for (const e of body.expenses) {
-            insertExp.run(e.expense_date, e.month_key, e.site_id || null, e.category, e.title, e.amount, e.receipt_url || '', e.created_at || new Date().toISOString());
+            insertExp.run(e.expense_date, e.month_key, e.site_id || null, e.category, e.title, e.amount, e.receipt_url || '', e.created_at || new Date().toISOString(), e.paid_by || '', e.fund_source || 'company');
           }
         }
 

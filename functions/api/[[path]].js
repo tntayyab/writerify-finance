@@ -111,6 +111,19 @@ async function incomeWrite(env, endpoint, method, payload, headers = {}) {
   }
 }
 
+// Partner columns added later: retry without them if the DB has not been migrated yet
+async function expenseWrite(env, endpoint, method, payload, headers = {}) {
+  try {
+    return { data: await sbFetch(env, endpoint, { method, headers, body: JSON.stringify(payload) }), saved: true };
+  } catch (err) {
+    if (!/PGRST204|column/i.test(String(err.message))) throw err;
+    const slim = { ...payload };
+    delete slim.paid_by;
+    delete slim.fund_source;
+    return { data: await sbFetch(env, endpoint, { method, headers, body: JSON.stringify(slim) }), saved: false };
+  }
+}
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -647,22 +660,20 @@ export async function onRequest(context) {
       const expenseDate = body.expense_date || new Date().toISOString().slice(0, 10);
       const monthKey = body.month_key || expenseDate.slice(0, 7);
 
-      const created = await sbFetch(env, '/expenses_ledger', {
-        method: 'POST',
-        headers: { 'Prefer': 'return=representation' },
-        body: JSON.stringify({
-          expense_date: expenseDate,
-          month_key: monthKey,
-          site_id: body.site_id ? parseInt(body.site_id, 10) : null,
-          category: body.category || 'miscellaneous',
-          title: body.title.trim(),
-          amount: parseFloat(body.amount) || 0,
-          receipt_url: body.receipt_url || ''
-        })
-      });
+      const { data: created, saved } = await expenseWrite(env, '/expenses_ledger', 'POST', {
+        expense_date: expenseDate,
+        month_key: monthKey,
+        site_id: body.site_id ? parseInt(body.site_id, 10) : null,
+        category: body.category || 'miscellaneous',
+        title: body.title.trim(),
+        amount: parseFloat(body.amount) || 0,
+        receipt_url: body.receipt_url || '',
+        paid_by: (body.paid_by || '').trim(),
+        fund_source: (body.fund_source || 'company').trim()
+      }, { 'Prefer': 'return=representation' });
 
       const item = Array.isArray(created) ? created[0] : created;
-      return jsonResponse({ success: true, expenseId: item ? item.id : null, message: 'Expense added to ledger' }, 201);
+      return jsonResponse({ success: true, partnerFieldsSaved: saved, expenseId: item ? item.id : null, message: 'Expense added to ledger' }, 201);
     }
 
     // DELETE/PUT /api/expenses/:id
@@ -681,11 +692,10 @@ export async function onRequest(context) {
       if (body.title !== undefined) updates.title = String(body.title).trim();
       if (body.amount !== undefined) updates.amount = parseFloat(body.amount) || 0;
       if (body.site_id !== undefined) updates.site_id = body.site_id ? parseInt(body.site_id, 10) : null;
-      await sbFetch(env, `/expenses_ledger?id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(updates)
-      });
-      return jsonResponse({ success: true, message: 'Expense updated' });
+      if (body.paid_by !== undefined) updates.paid_by = String(body.paid_by).trim();
+      if (body.fund_source !== undefined) updates.fund_source = String(body.fund_source).trim();
+      const { saved } = await expenseWrite(env, `/expenses_ledger?id=eq.${encodeURIComponent(id)}`, 'PATCH', updates);
+      return jsonResponse({ success: true, partnerFieldsSaved: saved, message: 'Expense updated' });
     }
 
     // ==========================================
@@ -828,9 +838,9 @@ export async function onRequest(context) {
 
       if (type === 'expenses') {
         const expenses = await sbFetch(env, '/expenses_ledger?select=*&order=expense_date.desc').catch(() => []);
-        let csv = 'ID,Date,Month,Site ID,Category,Title,Amount,Receipt URL\n';
+        let csv = 'ID,Date,Month,Site ID,Category,Title,Amount,Receipt URL,Paid By,Fund Source\n';
         (expenses || []).forEach(e => {
-          csv += `"${e.id}","${e.expense_date}","${e.month_key}","${e.site_id || ''}","${e.category}","${(e.title || '').replace(/"/g, '""')}",${(parseFloat(e.amount) || 0).toFixed(2)},"${e.receipt_url || ''}"\n`;
+          csv += `"${e.id}","${e.expense_date}","${e.month_key}","${e.site_id || ''}","${e.category}","${(e.title || '').replace(/"/g, '""')}",${(parseFloat(e.amount) || 0).toFixed(2)},"${e.receipt_url || ''}","${e.paid_by || ''}","${e.fund_source || ''}"\n`;
         });
         return textResponse(csv, 200, 'text/csv', 'writerify_expenses_ledger.csv');
       }
