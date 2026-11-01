@@ -12,6 +12,7 @@
     hosting: 'Hosting & Cloud',
     domain: 'Domain Names',
     content: 'Writers & Content',
+    website_purchase: 'Website Purchase',
     tools_ai: 'AI & Subscriptions',
     plugins: 'Plugins & Themes',
     va_team: 'VA & Team',
@@ -23,7 +24,7 @@
   const PARTNERS = ['Mustaqeem', 'Sazzad'];
   const FUND_SOURCES = { company: 'Company balance', sazzad: "Sazzad's personal", mustaqeem: "Mustaqeem's personal" };
   const FUND_BADGE = { company: 'brand', sazzad: 'warn', mustaqeem: 'info' };
-  const EXPENSE_PARTNER_SQL = "ALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS paid_by TEXT DEFAULT '';\nALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS fund_source TEXT DEFAULT 'company';\nNOTIFY pgrst, 'reload schema';";
+  const EXPENSE_PARTNER_SQL = "ALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS paid_by TEXT DEFAULT '';\nALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS fund_source TEXT DEFAULT 'company';\nALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS amount_bdt NUMERIC DEFAULT 0;\nALTER TABLE expenses_ledger ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC DEFAULT 0;\nNOTIFY pgrst, 'reload schema';";
   const PAGE_SIZES = [10, 25, 50, 100, 0]; // 0 = All
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -206,7 +207,7 @@ NOTIFY pgrst, 'reload schema';`;
     income: [],
     incomeSetupRequired: false,
     products: [],
-    rate: parseFloat(localStorage.getItem('wf_usd_bdt')) || 120,
+    rate: parseFloat(localStorage.getItem('wf_usd_bdt')) || 125,
     expenses: [],
     statusFilter: 'running',
     siteSearch: '',
@@ -684,7 +685,7 @@ NOTIFY pgrst, 'reload schema';`;
   async function loadExpenses() {
     const data = await apiFetch(`/api/expenses?month=${state.activeMonth}&range=all`);
     if (!data || !data.success) return;
-    state.expenses = (data.expenses || []).map((e) => ({ ...e, amount: num(e.amount) }));
+    state.expenses = (data.expenses || []).map((e) => ({ ...e, amount: num(e.amount), amount_bdt: num(e.amount_bdt) }));
     renderExpensesSection();
   }
 
@@ -1293,14 +1294,14 @@ NOTIFY pgrst, 'reload schema';`;
         <td>${e.paid_by ? `<span class="partner-pill ${esc(e.paid_by.toLowerCase())}"><i>${esc(e.paid_by[0])}</i>${esc(e.paid_by)}</span>` : '<span class="text-muted">—</span>'}</td>
         <td><span class="badge ${FUND_BADGE[e.fund_source || 'company'] || ''}">${esc(FUND_SOURCES[e.fund_source || 'company'] || e.fund_source)}</span></td>
         <td class="text-muted">${esc(e.site_name || 'Global')}</td>
-        <td class="amount out">${money2(e.amount)}</td>
+        <td class="amount out">${money2(e.amount)}${e.amount_bdt ? `<span class="bdt">${bdt(e.amount_bdt)}</span>` : ''}</td>
         <td><div class="cell-actions">
           <button class="icon-btn" data-act="edit" data-id="${e.id}" title="Edit">${ic('edit', 'sm')}</button>
           <button class="icon-btn danger" data-act="delete" data-id="${e.id}" title="Delete">${ic('trash', 'sm')}</button>
         </div></td></tr>`;
     },
     foot(rows) {
-      return `<tr class="tfoot-total"><td></td><td colspan="6">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-bad">${money2(rows.reduce((a, e) => a + e.amount, 0))}</td><td></td></tr>`;
+      return `<tr class="tfoot-total"><td></td><td colspan="6">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-bad">${money2(rows.reduce((a, e) => a + e.amount, 0))}<span class="bdt">${bdt(bdtOf(rows))}</span></td><td></td></tr>`;
     },
     empty() {
       if (!state.expenses.length) return `<div class="empty"><div class="empty-ic">${ic('receipt', 'lg')}</div><h4>No expenses yet</h4><p>Log hosting, domains, writers, tools and team costs to see true profit.</p><button class="btn btn-primary btn-sm" onclick="document.getElementById('openAddCostModalBtn').click()">${ic('plus', 'sm')}Add your first cost</button></div>`;
@@ -1323,7 +1324,7 @@ NOTIFY pgrst, 'reload schema';`;
     const rows = expenseRows();
     const total = rows.reduce((a, e) => a + e.amount, 0);
     $('ledgerTotalDisplay').textContent = money2(total);
-    $('expRangeLabel').textContent = expensePeriod.describe();
+    $('expRangeLabel').textContent = `${bdt(bdtOf(rows))} · ${expensePeriod.describe()}`;
     $('ledgerEntriesCount').textContent = rows.length.toLocaleString();
     $('expAvg').textContent = `Avg ${money2(rows.length ? total / rows.length : 0)} / entry`;
     const byCat = {};
@@ -1378,6 +1379,10 @@ NOTIFY pgrst, 'reload schema';`;
     $('costCategory').value = e ? e.category : 'hosting';
     $('costTitle').value = e ? e.title : '';
     $('costAmount').value = e ? e.amount : '';
+    const cRate = e && e.exchange_rate ? e.exchange_rate : state.rate;
+    $('costRate').value = cRate;
+    $('costAmountBdt').value = e ? (e.amount_bdt || (e.amount * cRate).toFixed(2)) : '';
+    $('costRateHint').textContent = '1 USD = ' + cRate + ' BDT';
     $('costSiteId').value = e && e.site_id ? String(e.site_id) : '';
     let lastPayer = '';
     try { lastPayer = localStorage.getItem('wf_last_payer') || ''; } catch (_) { /* ignore */ }
@@ -1651,6 +1656,20 @@ NOTIFY pgrst, 'reload schema';`;
       updateRateHint();
     });
 
+    // Expense modal: same USD <-> BDT live conversion
+    const cUsd = $('costAmount');
+    const cBdt = $('costAmountBdt');
+    const cRateEl = $('costRate');
+    const cRateVal = () => parseFloat(cRateEl.value) || state.rate;
+    cUsd.addEventListener('input', () => { cBdt.value = cUsd.value === '' ? '' : (parseFloat(cUsd.value) * cRateVal()).toFixed(2); });
+    cBdt.addEventListener('input', () => { cUsd.value = cBdt.value === '' ? '' : (parseFloat(cBdt.value) / cRateVal()).toFixed(2); });
+    cRateEl.addEventListener('input', () => {
+      const r = parseFloat(cRateEl.value);
+      if (r > 0) { state.rate = r; try { localStorage.setItem('wf_usd_bdt', String(r)); } catch (_) { /* ignore */ } }
+      if (cUsd.value !== '') cBdt.value = (parseFloat(cUsd.value) * cRateVal()).toFixed(2);
+      $('costRateHint').textContent = '1 USD = ' + cRateVal() + ' BDT';
+    });
+
     // New product modal
     $('openAddProductBtn').addEventListener('click', () => { $('productForm').reset(); openModal('productModal'); $('productName').focus(); });
     $('productForm').addEventListener('submit', async (e) => {
@@ -1677,7 +1696,9 @@ NOTIFY pgrst, 'reload schema';`;
         amount: parseFloat($('costAmount').value),
         site_id: $('costSiteId').value || null,
         paid_by: $('costPaidBy').value,
-        fund_source: $('costFundSource').value
+        fund_source: $('costFundSource').value,
+        amount_bdt: parseFloat($('costAmountBdt').value) || 0,
+        exchange_rate: parseFloat($('costRate').value) || state.rate
       };
       try { localStorage.setItem('wf_last_payer', payload.paid_by); } catch (_) { /* ignore */ }
       const res = await apiFetch(id ? `/api/expenses/${id}` : '/api/expenses', { method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) });

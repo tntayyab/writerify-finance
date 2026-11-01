@@ -121,7 +121,7 @@ for (const col of ["plan TEXT DEFAULT ''", 'amount_bdt REAL DEFAULT 0', 'exchang
 }
 
 // Expenses: partner accounting columns
-for (const col of ["paid_by TEXT DEFAULT ''", "fund_source TEXT DEFAULT 'company'"]) {
+for (const col of ["paid_by TEXT DEFAULT ''", "fund_source TEXT DEFAULT 'company'", 'amount_bdt REAL DEFAULT 0', 'exchange_rate REAL DEFAULT 0']) {
   try { db.exec(`ALTER TABLE expenses_ledger ADD COLUMN ${col}`); } catch { /* column already exists */ }
 }
 
@@ -768,10 +768,10 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       const receipt_url = body.receipt_url || '';
 
       const stmt = db.prepare(`
-        INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url, paid_by, fund_source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url, paid_by, fund_source, amount_bdt, exchange_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      const resInsert = stmt.run(expense_date, month_key, site_id, category, title, parseFloat(amount), receipt_url, (body.paid_by || '').trim(), (body.fund_source || 'company').trim());
+      const resInsert = stmt.run(expense_date, month_key, site_id, category, title, parseFloat(amount), receipt_url, (body.paid_by || '').trim(), (body.fund_source || 'company').trim(), parseFloat(body.amount_bdt) || 0, parseFloat(body.exchange_rate) || 0);
 
       autoBackup();
       return sendJson(res, 201, { success: true, expenseId: resInsert.lastInsertRowid, message: 'Expense added to ledger' });
@@ -791,7 +791,7 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       const cur = db.prepare('SELECT * FROM expenses_ledger WHERE id = ?').get(id);
       if (!cur) return sendJson(res, 404, { success: false, error: 'Expense not found' });
       const date = body.expense_date || cur.expense_date;
-      db.prepare('UPDATE expenses_ledger SET expense_date = ?, month_key = ?, site_id = ?, category = ?, title = ?, amount = ?, paid_by = ?, fund_source = ? WHERE id = ?').run(
+      db.prepare('UPDATE expenses_ledger SET expense_date = ?, month_key = ?, site_id = ?, category = ?, title = ?, amount = ?, paid_by = ?, fund_source = ?, amount_bdt = ?, exchange_rate = ? WHERE id = ?').run(
         date,
         date.slice(0, 7),
         body.site_id !== undefined ? (body.site_id ? parseInt(body.site_id, 10) : null) : cur.site_id,
@@ -800,6 +800,8 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         body.amount !== undefined ? parseFloat(body.amount) || 0 : cur.amount,
         body.paid_by !== undefined ? String(body.paid_by).trim() : cur.paid_by,
         body.fund_source !== undefined ? String(body.fund_source).trim() : cur.fund_source,
+        body.amount_bdt !== undefined ? parseFloat(body.amount_bdt) || 0 : cur.amount_bdt,
+        body.exchange_rate !== undefined ? parseFloat(body.exchange_rate) || 0 : cur.exchange_rate,
         id
       );
       autoBackup();
@@ -1023,11 +1025,11 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         // Restore expenses
         if (body.expenses && Array.isArray(body.expenses)) {
           const insertExp = db.prepare(`
-            INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url, created_at, paid_by, fund_source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO expenses_ledger (expense_date, month_key, site_id, category, title, amount, receipt_url, created_at, paid_by, fund_source, amount_bdt, exchange_rate)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `);
           for (const e of body.expenses) {
-            insertExp.run(e.expense_date, e.month_key, e.site_id || null, e.category, e.title, e.amount, e.receipt_url || '', e.created_at || new Date().toISOString(), e.paid_by || '', e.fund_source || 'company');
+            insertExp.run(e.expense_date, e.month_key, e.site_id || null, e.category, e.title, e.amount, e.receipt_url || '', e.created_at || new Date().toISOString(), e.paid_by || '', e.fund_source || 'company', e.amount_bdt || 0, e.exchange_rate || 0);
           }
         }
 

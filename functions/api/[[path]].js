@@ -118,8 +118,7 @@ async function expenseWrite(env, endpoint, method, payload, headers = {}) {
   } catch (err) {
     if (!/PGRST204|column/i.test(String(err.message))) throw err;
     const slim = { ...payload };
-    delete slim.paid_by;
-    delete slim.fund_source;
+    ['paid_by', 'fund_source', 'amount_bdt', 'exchange_rate'].forEach((c) => delete slim[c]);
     return { data: await sbFetch(env, endpoint, { method, headers, body: JSON.stringify(slim) }), saved: false };
   }
 }
@@ -669,7 +668,9 @@ export async function onRequest(context) {
         amount: parseFloat(body.amount) || 0,
         receipt_url: body.receipt_url || '',
         paid_by: (body.paid_by || '').trim(),
-        fund_source: (body.fund_source || 'company').trim()
+        fund_source: (body.fund_source || 'company').trim(),
+        amount_bdt: parseFloat(body.amount_bdt) || 0,
+        exchange_rate: parseFloat(body.exchange_rate) || 0
       }, { 'Prefer': 'return=representation' });
 
       const item = Array.isArray(created) ? created[0] : created;
@@ -694,6 +695,8 @@ export async function onRequest(context) {
       if (body.site_id !== undefined) updates.site_id = body.site_id ? parseInt(body.site_id, 10) : null;
       if (body.paid_by !== undefined) updates.paid_by = String(body.paid_by).trim();
       if (body.fund_source !== undefined) updates.fund_source = String(body.fund_source).trim();
+      if (body.amount_bdt !== undefined) updates.amount_bdt = parseFloat(body.amount_bdt) || 0;
+      if (body.exchange_rate !== undefined) updates.exchange_rate = parseFloat(body.exchange_rate) || 0;
       const { saved } = await expenseWrite(env, `/expenses_ledger?id=eq.${encodeURIComponent(id)}`, 'PATCH', updates);
       return jsonResponse({ success: true, partnerFieldsSaved: saved, message: 'Expense updated' });
     }

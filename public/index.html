@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4.2">
+  <link rel="stylesheet" href="styles.css?v=4.3">
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -431,11 +431,11 @@
             <div class="field full"><label>Title *</label><input type="text" id="incomeTitle" class="input" placeholder="e.g. October affiliate payout" required maxlength="140"></div>
             <div class="field full"><label>Description</label><textarea id="incomeDescription" class="textarea" placeholder="Notes, payout source, invoice reference…"></textarea></div>
             <div class="form-section full">
-              <div class="pricing-head"><span class="label">Pricing</span><span class="rate-hint" id="incomeRateHint">1 USD = 120 BDT</span></div>
+              <div class="pricing-head"><span class="label">Pricing</span><span class="rate-hint" id="incomeRateHint">1 USD = 125 BDT</span></div>
               <div class="form-grid">
                 <div class="field"><label>Amount (USD) *</label><div class="amount-field"><span>$</span><input type="number" id="incomeAmount" class="input" step="0.01" min="0" placeholder="0.00" required></div></div>
                 <div class="field"><label>Amount (BDT)</label><div class="amount-field"><span>৳</span><input type="number" id="incomeAmountBdt" class="input" step="0.01" min="0" placeholder="0.00"></div></div>
-                <div class="field full"><label>Exchange rate · BDT per 1 USD</label><input type="number" id="incomeRate" class="input" step="0.01" min="0.01" value="120"></div>
+                <div class="field full"><label>Exchange rate · BDT per 1 USD</label><input type="number" id="incomeRate" class="input" step="0.01" min="0.01" value="125"></div>
               </div>
             </div>
           </div>
@@ -481,8 +481,15 @@
             <div class="field full"><label>Description / title *</label><input type="text" id="costTitle" class="input" placeholder="e.g. Hetzner server renewal" required></div>
             <div class="field"><label>Paid by *</label><select id="costPaidBy" class="select" required></select></div>
             <div class="field"><label>Source of fund *</label><select id="costFundSource" class="select" required></select></div>
-            <div class="field"><label>Amount (USD) *</label><div class="amount-field"><span>$</span><input type="number" id="costAmount" class="input" step="0.01" min="0.01" placeholder="0.00" required></div></div>
-            <div class="field"><label>Associated site</label><select id="costSiteId" class="select"></select></div>
+            <div class="field full"><label>Associated site</label><select id="costSiteId" class="select"></select></div>
+            <div class="form-section full">
+              <div class="pricing-head"><span class="label">Pricing</span><span class="rate-hint" id="costRateHint">1 USD = 125 BDT</span></div>
+              <div class="form-grid">
+                <div class="field"><label>Amount (USD) *</label><div class="amount-field"><span>$</span><input type="number" id="costAmount" class="input" step="0.01" min="0.01" placeholder="0.00" required></div></div>
+                <div class="field"><label>Amount (BDT)</label><div class="amount-field"><span>৳</span><input type="number" id="costAmountBdt" class="input" step="0.01" min="0" placeholder="0.00"></div></div>
+                <div class="field full"><label>Exchange rate · BDT per 1 USD</label><input type="number" id="costRate" class="input" step="0.01" min="0.01" value="125"></div>
+              </div>
+            </div>
           </div>
           <div class="modal-foot">
             <button type="button" class="btn btn-ghost close-modal">Cancel</button>
@@ -529,6 +536,6 @@
     <linearGradient id="gradBrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8272ff"/><stop offset="100%" stop-color="#f472b6"/></linearGradient>
   </defs></svg>
 
-  <script src="app.js?v=4.2"></script>
+  <script src="app.js?v=4.3"></script>
 </body>
 </html>
