@@ -106,9 +106,10 @@ NOTIFY pgrst, 'reload schema';`;
   }
 
   function bdt(n) {
-    return '৳' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '৳' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   }
   // BDT total: stored BDT when present, otherwise converted at the current rate
+  const bdtVal = (e) => e.amount_bdt || e.amount * state.rate;
   const bdtOf = (rows) => rows.reduce((a, e) => a + (e.amount_bdt || e.amount * state.rate), 0);
 
   function plural(n, one, many) { return `${n} ${n === 1 ? one : (many || one + 's')}`; }
@@ -911,13 +912,14 @@ NOTIFY pgrst, 'reload schema';`;
     const map = new Map();
     const touch = (name) => {
       const key = name.toLowerCase();
-      if (!map.has(key)) map.set(key, { name, total: 0, count: 0, sites: new Set() });
+      if (!map.has(key)) map.set(key, { name, total: 0, bdt: 0, count: 0, sites: new Set() });
       return map.get(key);
     };
     if (includePresets) { PRODUCT_PRESETS.forEach(touch); state.products.forEach(touch); }
     entries.forEach((e) => {
       const p = touch(e.product || 'Uncategorized');
       p.total += e.amount;
+      p.bdt += bdtVal(e);
       p.count += 1;
       if (e.site_id) p.sites.add(String(e.site_id));
     });
@@ -1120,7 +1122,7 @@ NOTIFY pgrst, 'reload schema';`;
       { key: 'product', label: 'Product', sortable: true, sortValue: (e) => e.product },
       { key: 'site', label: 'Site', sortable: true, sortValue: (e) => e.site_name || '' },
       { key: 'title', label: 'Title & description', sortable: true, sortValue: (e) => e.title },
-      { key: 'amount', label: 'Amount', align: 'right', sortable: true, firstDir: 'desc', sortValue: (e) => e.amount },
+      { key: 'amount', label: 'Amount', align: 'right', sortable: true, firstDir: 'desc', sortValue: bdtVal },
       { key: 'act', label: '', align: 'right', width: '84px' }
     ],
     row(e, i) {
@@ -1130,14 +1132,14 @@ NOTIFY pgrst, 'reload schema';`;
         <td>${productTag(e.product)}${e.plan ? `<span class="plan-badge ${esc(e.plan.toLowerCase())}">${esc(e.plan)}</span>` : ''}</td>
         <td>${e.site_name ? `<span class="meta-chip">${ic('globe', 'xs')}${esc(e.site_name)}</span>` : '<span class="text-muted">—</span>'}</td>
         <td><div class="cell-main">${esc(e.title)}</div>${e.description ? `<div class="cell-sub" title="${esc(e.description)}">${esc(e.description)}</div>` : ''}</td>
-        <td class="amount in">${money2(e.amount)}${e.amount_bdt ? `<span class="bdt">${bdt(e.amount_bdt)}</span>` : ''}</td>
+        <td class="amount in">${bdt(bdtVal(e))}<span class="bdt">${money2(e.amount)}</span></td>
         <td><div class="cell-actions">
           <button class="icon-btn" data-act="edit" data-id="${e.id}" title="Edit">${ic('edit', 'sm')}</button>
           <button class="icon-btn danger" data-act="delete" data-id="${e.id}" title="Delete">${ic('trash', 'sm')}</button>
         </div></td></tr>`;
     },
     foot(rows) {
-      return `<tr class="tfoot-total"><td></td><td colspan="4">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-good">${money2(rows.reduce((a, e) => a + e.amount, 0))}<span class="bdt">${bdt(bdtOf(rows))}</span></td><td></td></tr>`;
+      return `<tr class="tfoot-total"><td></td><td colspan="4">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-good">${bdt(bdtOf(rows))}<span class="bdt">${money2(rows.reduce((a, e) => a + e.amount, 0))}</span></td><td></td></tr>`;
     },
     empty() {
       if (state.incomeSetupRequired) return `<div class="empty"><div class="empty-ic">${ic('database', 'lg')}</div><h4>Almost there</h4><p>Run the one-time SQL shown above in Supabase, then reload.</p></div>`;
@@ -1149,7 +1151,7 @@ NOTIFY pgrst, 'reload schema';`;
       if (!entry) return;
       if (act === 'edit') openIncomeModal(entry);
       if (act === 'delete') {
-        const ok = await confirmDialog('Delete income entry?', `“${entry.title}” (${money2(entry.amount)}) will be removed.`);
+        const ok = await confirmDialog('Delete income entry?', `“${entry.title}” (${bdt(bdtVal(entry))}) will be removed.`);
         if (!ok) return;
         const res = await apiFetch(`/api/income/${entry.id}`, { method: 'DELETE' });
         if (res.success) { showToast('Income entry removed'); await Promise.all([loadIncome(), loadSummary(), loadSites()]); renderOverviewProducts(); }
@@ -1192,16 +1194,16 @@ NOTIFY pgrst, 'reload schema';`;
     const sites = new Set(rows.filter((e) => e.site_id).map((e) => String(e.site_id)));
     const untagged = rows.filter((e) => !e.site_id).length;
 
-    $('incTotal').textContent = money2(total);
-    $('incRangeLabel').textContent = `${bdt(bdtOf(rows))} · ${incomePeriod.describe()}`;
+    $('incTotal').textContent = bdt(bdtOf(rows));
+    $('incRangeLabel').textContent = `${money2(total)} · ${incomePeriod.describe()}`;
     $('incCount').textContent = rows.length.toLocaleString();
-    $('incAvg').textContent = `Avg ${money2(rows.length ? total / rows.length : 0)} / entry`;
+    $('incAvg').textContent = `Avg ${bdt(rows.length ? bdtOf(rows) / rows.length : 0)} / entry`;
     $('incSites').textContent = sites.size.toLocaleString();
     $('incSitesFoot').textContent = untagged ? `${plural(untagged, 'entry', 'entries')} without a site` : 'all entries tagged';
 
     const prods = productBreakdown(base).filter((p) => p.total > 0);
     $('incTop').textContent = prods.length ? prods[0].name : '—';
-    $('incTopFoot').textContent = prods.length ? `${money2(prods[0].total)} · ${prods[0].share.toFixed(0)}% of range` : 'No income in range';
+    $('incTopFoot').textContent = prods.length ? `${bdt(prods[0].bdt)} (${money2(prods[0].total)}) · ${prods[0].share.toFixed(0)}% of range` : 'No income in range';
 
     renderProductCards(base);
     incomeTable.render();
@@ -1212,7 +1214,7 @@ NOTIFY pgrst, 'reload schema';`;
     $('incomeProducts').innerHTML = list.map((p) => `
       <button type="button" class="product-card ${state.incomeProduct.toLowerCase() === p.name.toLowerCase() ? 'active' : ''}" data-product="${esc(p.name)}" style="--pc:${colorOf(p.name)}">
         <div class="p-name"><span>${esc(p.name)}</span><span class="p-share">${p.share.toFixed(0)}%</span></div>
-        <div class="p-total num">${money2(p.total)}</div>
+        <div class="p-total num">${bdt(p.bdt)}<small>${money2(p.total)}</small></div>
         <div class="bar"><i style="width:${p.share.toFixed(1)}%"></i></div>
         <div class="p-meta"><span><b>${p.sites}</b> ${p.sites === 1 ? 'site' : 'sites'}</span><span><b>${p.count}</b> ${p.count === 1 ? 'entry' : 'entries'}</span></div>
       </button>`).join('');
@@ -1282,7 +1284,7 @@ NOTIFY pgrst, 'reload schema';`;
       { key: 'paid', label: 'Paid by', sortable: true, sortValue: (e) => e.paid_by || '' },
       { key: 'fund', label: 'Source of fund', sortable: true, sortValue: (e) => FUND_SOURCES[e.fund_source || 'company'] || '' },
       { key: 'site', label: 'Site', sortable: true, sortValue: (e) => e.site_name || '' },
-      { key: 'amount', label: 'Amount', align: 'right', sortable: true, firstDir: 'desc', sortValue: (e) => e.amount },
+      { key: 'amount', label: 'Amount', align: 'right', sortable: true, firstDir: 'desc', sortValue: bdtVal },
       { key: 'act', label: '', align: 'right', width: '84px' }
     ],
     row(e, i) {
@@ -1294,14 +1296,14 @@ NOTIFY pgrst, 'reload schema';`;
         <td>${e.paid_by ? `<span class="partner-pill ${esc(e.paid_by.toLowerCase())}"><i>${esc(e.paid_by[0])}</i>${esc(e.paid_by)}</span>` : '<span class="text-muted">—</span>'}</td>
         <td><span class="badge ${FUND_BADGE[e.fund_source || 'company'] || ''}">${esc(FUND_SOURCES[e.fund_source || 'company'] || e.fund_source)}</span></td>
         <td class="text-muted">${esc(e.site_name || 'Global')}</td>
-        <td class="amount out">${money2(e.amount)}${e.amount_bdt ? `<span class="bdt">${bdt(e.amount_bdt)}</span>` : ''}</td>
+        <td class="amount out">${bdt(bdtVal(e))}<span class="bdt">${money2(e.amount)}</span></td>
         <td><div class="cell-actions">
           <button class="icon-btn" data-act="edit" data-id="${e.id}" title="Edit">${ic('edit', 'sm')}</button>
           <button class="icon-btn danger" data-act="delete" data-id="${e.id}" title="Delete">${ic('trash', 'sm')}</button>
         </div></td></tr>`;
     },
     foot(rows) {
-      return `<tr class="tfoot-total"><td></td><td colspan="6">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-bad">${money2(rows.reduce((a, e) => a + e.amount, 0))}<span class="bdt">${bdt(bdtOf(rows))}</span></td><td></td></tr>`;
+      return `<tr class="tfoot-total"><td></td><td colspan="6">${plural(rows.length, 'entry', 'entries')} · total</td><td class="amount text-bad">${bdt(bdtOf(rows))}<span class="bdt">${money2(rows.reduce((a, e) => a + e.amount, 0))}</span></td><td></td></tr>`;
     },
     empty() {
       if (!state.expenses.length) return `<div class="empty"><div class="empty-ic">${ic('receipt', 'lg')}</div><h4>No expenses yet</h4><p>Log hosting, domains, writers, tools and team costs to see true profit.</p><button class="btn btn-primary btn-sm" onclick="document.getElementById('openAddCostModalBtn').click()">${ic('plus', 'sm')}Add your first cost</button></div>`;
@@ -1312,7 +1314,7 @@ NOTIFY pgrst, 'reload schema';`;
       if (!e) return;
       if (act === 'edit') openCostModal(e);
       if (act === 'delete') {
-        const ok = await confirmDialog('Delete expense?', `“${e.title}” (${money2(e.amount)}) will be removed.`);
+        const ok = await confirmDialog('Delete expense?', `“${e.title}” (${bdt(bdtVal(e))}) will be removed.`);
         if (!ok) return;
         const res = await apiFetch(`/api/expenses/${e.id}`, { method: 'DELETE' });
         if (res.success) { showToast('Expense removed'); await Promise.all([loadExpenses(), loadSummary()]); }
@@ -1323,15 +1325,16 @@ NOTIFY pgrst, 'reload schema';`;
   function renderExpensesSection() {
     const rows = expenseRows();
     const total = rows.reduce((a, e) => a + e.amount, 0);
-    $('ledgerTotalDisplay').textContent = money2(total);
-    $('expRangeLabel').textContent = `${bdt(bdtOf(rows))} · ${expensePeriod.describe()}`;
+    $('ledgerTotalDisplay').textContent = bdt(bdtOf(rows));
+    $('expRangeLabel').textContent = `${money2(total)} · ${expensePeriod.describe()}`;
     $('ledgerEntriesCount').textContent = rows.length.toLocaleString();
-    $('expAvg').textContent = `Avg ${money2(rows.length ? total / rows.length : 0)} / entry`;
+    $('expAvg').textContent = `Avg ${bdt(rows.length ? bdtOf(rows) / rows.length : 0)} / entry`;
     const byCat = {};
-    rows.forEach((e) => { byCat[e.category] = (byCat[e.category] || 0) + e.amount; });
+    const totalBdt = bdtOf(rows);
+    rows.forEach((e) => { byCat[e.category] = (byCat[e.category] || 0) + bdtVal(e); });
     const top = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
     $('expTop').textContent = top ? (CATEGORIES[top[0]] || top[0]) : '—';
-    $('expTopFoot').textContent = top ? `${money2(top[1])} · ${total ? Math.round((top[1] / total) * 100) : 0}% of spend` : 'No spend in range';
+    $('expTopFoot').textContent = top ? `${bdt(top[1])} · ${totalBdt ? Math.round((top[1] / totalBdt) * 100) : 0}% of spend` : 'No spend in range';
     renderPartnerSplit();
     expensesTable.render();
   }
@@ -1339,7 +1342,7 @@ NOTIFY pgrst, 'reload schema';`;
   // Who funded what, and who owes whom (50/50 partners) for the selected date range
   function renderPartnerSplit() {
     const rows = state.expenses.filter((e) => expensePeriod.match(e.expense_date));
-    const sum = (f) => rows.filter(f).reduce((a, e) => a + e.amount, 0);
+    const sum = (f) => rows.filter(f).reduce((a, e) => a + bdtVal(e), 0);
     const fund = (e) => e.fund_source || 'company';
     const company = sum((e) => fund(e) === 'company');
     const sz = sum((e) => fund(e) === 'sazzad');
@@ -1348,11 +1351,11 @@ NOTIFY pgrst, 'reload schema';`;
     const paidMq = sum((e) => e.paid_by === 'Mustaqeem');
 
     $('psRange').textContent = expensePeriod.describe() + ' · ' + plural(rows.length, 'expense');
-    $('psCompany').textContent = money2(company);
-    $('psSazzad').textContent = money2(sz);
-    $('psMustaqeem').textContent = money2(mq);
-    $('psPaidSazzad').textContent = 'Sazzad ' + money2(paidSz);
-    $('psPaidMustaqeem').textContent = 'Mustaqeem ' + money2(paidMq);
+    $('psCompany').textContent = bdt(company);
+    $('psSazzad').textContent = bdt(sz);
+    $('psMustaqeem').textContent = bdt(mq);
+    $('psPaidSazzad').textContent = 'Sazzad ' + bdt(paidSz);
+    $('psPaidMustaqeem').textContent = 'Mustaqeem ' + bdt(paidMq);
 
     const diff = (sz - mq) / 2;
     const box = $('psSettle');
@@ -1363,8 +1366,8 @@ NOTIFY pgrst, 'reload schema';`;
       const debtor = diff > 0 ? 'Mustaqeem' : 'Sazzad';
       const creditor = diff > 0 ? 'Sazzad' : 'Mustaqeem';
       box.className = 'settle owe';
-      box.innerHTML = '<b>' + debtor + ' owes ' + creditor + ' ' + money2(Math.abs(diff)) + '</b> to split personal spending 50/50.' +
-        '<small>Or reimburse from the company balance instead: Sazzad ' + money2(sz) + ' · Mustaqeem ' + money2(mq) + '</small>';
+      box.innerHTML = '<b>' + debtor + ' owes ' + creditor + ' ' + bdt(Math.abs(diff)) + '</b> to split personal spending 50/50.' +
+        '<small>≈ ' + money2(Math.abs(diff) / state.rate) + ' · Or reimburse from the company balance instead: Sazzad ' + bdt(sz) + ' · Mustaqeem ' + bdt(mq) + '</small>';
     }
 
     const sample = state.expenses[0];
