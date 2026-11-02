@@ -25,6 +25,9 @@
 - Expenses can now be edited and deleted; the Restore button works (`POST /api/backup/restore`).
 - Downloads (CSV / backup) use the Authorization header — no more auth token in the URL.
 
+- **Equity section:** net profit (income minus all expenses) is split 50/50 between Mustaqeem and Sazzad. A partner who paid an expense from their own pocket gets that money back on top of their share. Withdrawals reduce that partner's balance and the company cash. Mustaqeem's balance + Sazzad's balance always equals company cash. Run `supabase_equity_migration.sql` once to enable withdrawals.
+- **Month filters** moved out of the sidebar: every section has its own 12-month dropdown.
+
 ### One-time database setup for Income
 Open **Supabase → SQL Editor**, paste [`supabase_income_migration.sql`](supabase_income_migration.sql) and press **Run**.
 Until then the Income section shows the SQL with a *Copy* button and the rest of the app keeps working.

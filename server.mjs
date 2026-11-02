@@ -115,6 +115,21 @@ db.exec(`
   );
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS partner_withdrawals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    withdrawal_date TEXT NOT NULL,
+    month_key TEXT NOT NULL,
+    partner TEXT NOT NULL,
+    amount_bdt REAL NOT NULL DEFAULT 0,
+    amount REAL NOT NULL DEFAULT 0,
+    exchange_rate REAL DEFAULT 0,
+    note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
 // Income entries: plan + BDT columns on older databases
 for (const col of ["plan TEXT DEFAULT ''", 'amount_bdt REAL DEFAULT 0', 'exchange_rate REAL DEFAULT 0']) {
   try { db.exec(`ALTER TABLE income_entries ADD COLUMN ${col}`); } catch { /* column already exists */ }
@@ -246,6 +261,37 @@ function sendText(res, statusCode, text, contentType = 'text/plain') {
     'Access-Control-Allow-Origin': '*'
   });
   res.end(text);
+}
+
+// Monthly BDT totals for the Equity section (personal-fund expenses kept apart)
+function buildEquityMonths(rate) {
+  const months = {};
+  const at = (key) => months[key] || (months[key] = { month_key: key, income: 0, company_cost: 0, sazzad_cost: 0, mustaqeem_cost: 0, sazzad_withdrawn: 0, mustaqeem_withdrawn: 0 });
+  for (const i of db.prepare('SELECT * FROM income_entries').all()) {
+    at(i.month_key).income += i.amount_bdt || (i.amount || 0) * (i.exchange_rate || rate);
+  }
+  for (const m of db.prepare('SELECT * FROM monthly_site_metrics').all()) {
+    const row = at(m.month_key);
+    row.income += ((m.ads_income || 0) + (m.amazon_income || 0) + (m.other_income || 0)) * rate;
+    row.company_cost += (m.cost || 0) * rate;
+  }
+  for (const e of db.prepare('SELECT * FROM expenses_ledger').all()) {
+    const fund = e.fund_source === 'sazzad' || e.fund_source === 'mustaqeem' ? e.fund_source : 'company';
+    at(e.month_key)[fund + '_cost'] += e.amount_bdt || (e.amount || 0) * (e.exchange_rate || rate);
+  }
+  for (const w of db.prepare('SELECT * FROM partner_withdrawals').all()) {
+    const who = String(w.partner || '').toLowerCase();
+    if (who === 'sazzad' || who === 'mustaqeem') at(w.month_key)[who + '_withdrawn'] += w.amount_bdt || 0;
+  }
+  return Object.values(months).sort((a, b) => a.month_key.localeCompare(b.month_key));
+}
+
+function withdrawalArgs(body) {
+  const date = String(body.withdrawal_date || '').slice(0, 10);
+  const partner = ['Mustaqeem', 'Sazzad'].find((p) => p === body.partner);
+  const bdt = parseFloat(body.amount_bdt) || 0;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !partner || bdt <= 0) return null;
+  return [date, date.slice(0, 7), partner, bdt, parseFloat(body.amount) || 0, parseFloat(body.exchange_rate) || 0, String(body.note || '').trim()];
 }
 
 // Backup helper
@@ -885,6 +931,36 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       return sendJson(res, 200, { success: true, message: 'Income entry removed' });
     }
 
+    // API: EQUITY (monthly totals + partner withdrawals, BDT)
+    if (pathname === '/api/equity' && req.method === 'GET') {
+      const rate = parseFloat(parsedUrl.searchParams.get('rate')) || 125;
+      const withdrawals = db.prepare('SELECT * FROM partner_withdrawals ORDER BY withdrawal_date DESC, id DESC').all();
+      return sendJson(res, 200, { success: true, setupRequired: false, rate, months: buildEquityMonths(rate), withdrawals });
+    }
+
+    if (pathname === '/api/withdrawals' && req.method === 'POST') {
+      const args = withdrawalArgs(await parseJsonBody(req));
+      if (!args) return sendJson(res, 400, { success: false, error: 'date, partner and a positive BDT amount are required' });
+      const r = db.prepare('INSERT INTO partner_withdrawals (withdrawal_date, month_key, partner, amount_bdt, amount, exchange_rate, note) VALUES (?, ?, ?, ?, ?, ?, ?)').run(...args);
+      autoBackup();
+      return sendJson(res, 201, { success: true, withdrawalId: r.lastInsertRowid, message: 'Withdrawal recorded' });
+    }
+
+    if (pathname.startsWith('/api/withdrawals/') && req.method === 'PUT') {
+      const id = parseInt(pathname.split('/')[3], 10);
+      const args = withdrawalArgs(await parseJsonBody(req));
+      if (!args) return sendJson(res, 400, { success: false, error: 'date, partner and a positive BDT amount are required' });
+      db.prepare("UPDATE partner_withdrawals SET withdrawal_date = ?, month_key = ?, partner = ?, amount_bdt = ?, amount = ?, exchange_rate = ?, note = ?, updated_at = datetime('now') WHERE id = ?").run(...args, id);
+      autoBackup();
+      return sendJson(res, 200, { success: true, message: 'Withdrawal updated' });
+    }
+
+    if (pathname.startsWith('/api/withdrawals/') && req.method === 'DELETE') {
+      db.prepare('DELETE FROM partner_withdrawals WHERE id = ?').run(parseInt(pathname.split('/')[3], 10));
+      autoBackup();
+      return sendJson(res, 200, { success: true, message: 'Withdrawal removed' });
+    }
+
     // API: CSV EXPORT
     if (pathname === '/api/export/csv' && req.method === 'GET') {
       const type = parsedUrl.searchParams.get('type') || 'sites';
@@ -961,6 +1037,7 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
       const expenses = db.prepare('SELECT * FROM expenses_ledger').all();
       const settings = db.prepare('SELECT * FROM settings').all();
       const income = db.prepare('SELECT * FROM income_entries').all();
+      const withdrawals = db.prepare('SELECT * FROM partner_withdrawals').all();
 
       const dump = {
         app: 'Writerify Finance Command Center',
@@ -970,7 +1047,8 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         sites,
         metrics,
         expenses,
-        income
+        income,
+        withdrawals
       };
 
       res.writeHead(200, {
@@ -1001,6 +1079,7 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
         db.prepare('DELETE FROM monthly_site_metrics').run();
         db.prepare('DELETE FROM expenses_ledger').run();
         db.prepare('DELETE FROM income_entries').run();
+        db.prepare('DELETE FROM partner_withdrawals').run();
         db.prepare('DELETE FROM sites').run();
 
         const insertSite = db.prepare(`
@@ -1030,6 +1109,14 @@ const thisMonth = getMetricsForMonth(currentMonthKey);
           `);
           for (const e of body.expenses) {
             insertExp.run(e.expense_date, e.month_key, e.site_id || null, e.category, e.title, e.amount, e.receipt_url || '', e.created_at || new Date().toISOString(), e.paid_by || '', e.fund_source || 'company', e.amount_bdt || 0, e.exchange_rate || 0);
+          }
+        }
+
+        // Restore partner withdrawals
+        if (body.withdrawals && Array.isArray(body.withdrawals)) {
+          const insertW = db.prepare('INSERT INTO partner_withdrawals (id, withdrawal_date, month_key, partner, amount_bdt, amount, exchange_rate, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+          for (const w of body.withdrawals) {
+            insertW.run(w.id, w.withdrawal_date, w.month_key, w.partner, w.amount_bdt || 0, w.amount || 0, w.exchange_rate || 0, w.note || '');
           }
         }
 

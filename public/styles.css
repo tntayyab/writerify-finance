@@ -36,6 +36,8 @@ html.theme-dark {
   --track: rgba(148, 163, 184, 0.16);
   --input-bg: #0c1120;
   --row-hover: rgba(130, 114, 255, 0.06);
+  --mq: #4f8cf0;
+  --sz: #dc6a1a;
 }
 
 html.theme-light {
@@ -70,6 +72,8 @@ html.theme-light {
   --track: rgba(15, 23, 42, 0.09);
   --input-bg: #ffffff;
   --row-hover: rgba(91, 73, 240, 0.045);
+  --mq: #2f6fed;
+  --sz: #e8590c;
 }
 
 /* ---------- Base ---------- */
@@ -583,3 +587,45 @@ table.data tr.row-flash td { animation: flash 2.2s ease-out; }
 /* BDT is the main figure; USD is the small line under it */
 .product-card .p-total small { display: block; margin-top: 1px; font-size: 12.5px; font-weight: 700; letter-spacing: 0; color: var(--text-3); }
 .amount .bdt { font-size: 11.5px; }
+
+/* Month filter inside a section */
+.month-bar { display: flex; align-items: center; gap: 8px; align-self: flex-start; padding: 6px 8px 6px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+
+/* Equity */
+.eq-hero { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 2fr); gap: 16px; align-items: stretch; }
+.eq-cash { position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 24px; border-radius: 22px; border: 1px solid var(--brand-line); box-shadow: var(--shadow);
+  background: radial-gradient(420px 240px at 0% 0%, rgba(130, 114, 255, 0.3), transparent 70%), radial-gradient(360px 220px at 100% 100%, rgba(244, 114, 182, 0.16), transparent 70%), var(--surface-solid); }
+.eq-cash-val { font-size: 42px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.1; margin-top: 12px; }
+.eq-cash-sub { margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--text-3); }
+.eq-flow { margin-top: auto; padding-top: 18px; display: flex; flex-direction: column; gap: 6px; }
+.eq-flow-item { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.eq-flow-item small { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.eq-flow-item b { font-size: 14px; font-weight: 800; }
+.eq-partners { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.eq-partner { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); transition: transform 0.18s, border-color 0.18s; }
+.eq-partner::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--pc); }
+.eq-partner:hover { transform: translateY(-3px); border-color: var(--pc); }
+.eq-p-top { display: flex; align-items: center; gap: 10px; }
+.eq-avatar { width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--pc); }
+.eq-p-name { flex: 1; min-width: 0; line-height: 1.2; }
+.eq-p-name b { display: block; font-size: 15px; font-weight: 800; }
+.eq-p-name small { font-size: 11.5px; color: var(--text-3); font-weight: 600; }
+.eq-p-body { display: flex; align-items: center; gap: 14px; }
+.eq-p-bal { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; margin-top: 2px; }
+.eq-p-body small { font-size: 11.5px; font-weight: 600; }
+.eq-p-lines { display: flex; flex-direction: column; gap: 5px; margin-top: auto; }
+.eq-p-lines div { display: flex; justify-content: space-between; gap: 10px; padding-top: 5px; border-top: 1px dashed var(--line); font-size: 12.5px; color: var(--text-2); font-weight: 600; }
+.eq-p-lines b { font-weight: 800; color: var(--text); }
+.eq-arc { transition: opacity 0.15s; cursor: pointer; }
+.eq-arc.dim { opacity: 0.25; }
+.eq-bar { transform-box: fill-box; transform-origin: bottom; animation: eqGrow 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both; animation-delay: var(--d, 0ms); }
+@keyframes eqGrow { from { transform: scaleY(0); } }
+.eq-line { stroke-dasharray: 1; animation: eqDraw 1s ease-out both; }
+@keyframes eqDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.eq-statement-head { padding: 14px 16px 10px; }
+#eqStatement td:first-child { font-weight: 600; color: var(--text-2); }
+#eqStatement tr.eq-sub td { background: var(--surface-2); font-weight: 800; color: var(--text); }
+#eqStatement tr.eq-total td { background: var(--brand-soft); font-weight: 800; color: var(--text); font-size: 14px; }
+.settle b.num { font-weight: 800; }
+@media (max-width: 1100px) { .eq-hero { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .eq-partners { grid-template-columns: 1fr; } .eq-cash-val { font-size: 34px; } }

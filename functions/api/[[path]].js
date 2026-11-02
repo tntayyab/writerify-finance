@@ -123,6 +123,50 @@ async function expenseWrite(env, endpoint, method, payload, headers = {}) {
   }
 }
 
+// Monthly BDT totals for the Equity section. Personal-fund expenses are kept apart so each
+// partner gets that money back on top of their 50% profit share.
+function buildEquityMonths(income, metrics, expenses, withdrawals, rate) {
+  const n = (v) => parseFloat(v) || 0;
+  const months = {};
+  const at = (key) => months[key] || (months[key] = { month_key: key, income: 0, company_cost: 0, sazzad_cost: 0, mustaqeem_cost: 0, sazzad_withdrawn: 0, mustaqeem_withdrawn: 0 });
+  for (const i of income) {
+    if (i.month_key) at(i.month_key).income += n(i.amount_bdt) || n(i.amount) * (n(i.exchange_rate) || rate);
+  }
+  for (const m of metrics) {
+    if (!m.month_key) continue;
+    const row = at(m.month_key);
+    row.income += (n(m.ads_income) + n(m.amazon_income) + n(m.other_income)) * rate;
+    row.company_cost += n(m.cost) * rate;
+  }
+  for (const e of expenses) {
+    if (!e.month_key) continue;
+    const bdt = n(e.amount_bdt) || n(e.amount) * (n(e.exchange_rate) || rate);
+    const fund = e.fund_source === 'sazzad' || e.fund_source === 'mustaqeem' ? e.fund_source : 'company';
+    at(e.month_key)[fund + '_cost'] += bdt;
+  }
+  for (const w of withdrawals) {
+    const who = String(w.partner || '').toLowerCase();
+    if (w.month_key && (who === 'sazzad' || who === 'mustaqeem')) at(w.month_key)[who + '_withdrawn'] += n(w.amount_bdt);
+  }
+  return Object.values(months).sort((a, b) => a.month_key.localeCompare(b.month_key));
+}
+
+function withdrawalPayload(body) {
+  const date = String(body.withdrawal_date || '').slice(0, 10);
+  const partner = ['Mustaqeem', 'Sazzad'].find((p) => p === body.partner);
+  const bdt = parseFloat(body.amount_bdt) || 0;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !partner || bdt <= 0) return null;
+  return {
+    withdrawal_date: date,
+    month_key: date.slice(0, 7),
+    partner,
+    amount_bdt: bdt,
+    amount: parseFloat(body.amount) || 0,
+    exchange_rate: parseFloat(body.exchange_rate) || 0,
+    note: String(body.note || '').trim()
+  };
+}
+
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -804,6 +848,65 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, message: 'Income entry removed' });
     }
 
+    // ==========================================
+    // EQUITY: monthly totals + partner withdrawals (amounts in BDT)
+    // ==========================================
+    if (pathname === '/api/equity' && method === 'GET') {
+      const rate = parseFloat(url.searchParams.get('rate')) || 125;
+      const [income, metrics, expenses, withdrawalsRaw] = await Promise.all([
+        sbFetch(env, '/income_entries?select=*').catch((err) => { if (isMissingTable(err)) return []; throw err; }),
+        sbFetch(env, '/monthly_site_metrics?select=*'),
+        sbFetch(env, '/expenses_ledger?select=*'),
+        sbFetch(env, '/partner_withdrawals?select=*&order=withdrawal_date.desc,id.desc').catch((err) => { if (isMissingTable(err)) return null; throw err; })
+      ]);
+      const withdrawals = (withdrawalsRaw || []).map((w) => ({ ...w, amount_bdt: parseFloat(w.amount_bdt) || 0, amount: parseFloat(w.amount) || 0 }));
+      return jsonResponse({
+        success: true,
+        setupRequired: withdrawalsRaw === null,
+        rate,
+        months: buildEquityMonths(income || [], metrics || [], expenses || [], withdrawals, rate),
+        withdrawals
+      });
+    }
+
+    if (pathname === '/api/withdrawals' && method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const row = withdrawalPayload(body);
+      if (!row) return jsonResponse({ success: false, error: 'date, partner and a positive BDT amount are required' }, 400);
+      try {
+        const created = await sbFetch(env, '/partner_withdrawals', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify(row)
+        });
+        const item = Array.isArray(created) ? created[0] : created;
+        return jsonResponse({ success: true, withdrawalId: item ? item.id : null, message: 'Withdrawal recorded' }, 201);
+      } catch (err) {
+        if (isMissingTable(err)) {
+          return jsonResponse({ success: false, setupRequired: true, error: 'Withdrawals table not found. Run the SQL migration in Supabase first.' }, 503);
+        }
+        throw err;
+      }
+    }
+
+    if (pathname.startsWith('/api/withdrawals/') && method === 'PUT') {
+      const id = pathname.split('/')[3];
+      const body = await request.json().catch(() => ({}));
+      const row = withdrawalPayload(body);
+      if (!row) return jsonResponse({ success: false, error: 'date, partner and a positive BDT amount are required' }, 400);
+      await sbFetch(env, `/partner_withdrawals?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ...row, updated_at: new Date().toISOString() })
+      });
+      return jsonResponse({ success: true, message: 'Withdrawal updated' });
+    }
+
+    if (pathname.startsWith('/api/withdrawals/') && method === 'DELETE') {
+      const id = pathname.split('/')[3];
+      await sbFetch(env, `/partner_withdrawals?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+      return jsonResponse({ success: true, message: 'Withdrawal removed' });
+    }
+
     // GET /api/export/csv
     if (pathname === '/api/export/csv' && method === 'GET') {
       const type = url.searchParams.get('type') || 'sites';
@@ -851,12 +954,13 @@ export async function onRequest(context) {
 
     // GET /api/backup/export
     if (pathname === '/api/backup/export' && method === 'GET') {
-      const [settings, sites, metrics, expenses, income] = await Promise.all([
+      const [settings, sites, metrics, expenses, income, withdrawals] = await Promise.all([
         sbFetch(env, '/settings?select=*').catch(() => []),
         sbFetch(env, '/sites?select=*').catch(() => []),
         sbFetch(env, '/monthly_site_metrics?select=*').catch(() => []),
         sbFetch(env, '/expenses_ledger?select=*').catch(() => []),
-        sbFetch(env, '/income_entries?select=*').catch(() => [])
+        sbFetch(env, '/income_entries?select=*').catch(() => []),
+        sbFetch(env, '/partner_withdrawals?select=*').catch(() => [])
       ]);
 
       const backup = {
@@ -865,7 +969,8 @@ export async function onRequest(context) {
         sites: sites || [],
         metrics: metrics || [],
         expenses: expenses || [],
-        income: income || []
+        income: income || [],
+        withdrawals: withdrawals || []
       };
 
       return textResponse(JSON.stringify(backup, null, 2), 200, 'application/json', `writerify_finance_full_backup_${Date.now()}.json`);
@@ -895,6 +1000,7 @@ export async function onRequest(context) {
       counts.expenses = await upsert('expenses_ledger', body.expenses, 'id');
       counts.settings = await upsert('settings', body.settings, 'key');
       try { counts.income = await upsert('income_entries', body.income, 'id'); } catch (err) { if (!isMissingTable(err)) throw err; counts.income = 0; }
+      try { counts.withdrawals = await upsert('partner_withdrawals', body.withdrawals, 'id'); } catch (err) { if (!isMissingTable(err)) throw err; counts.withdrawals = 0; }
       return jsonResponse({ success: true, message: 'Backup restored', counts });
     }
 
