@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <script>try { if (localStorage.getItem('writerify_auth_token')) document.documentElement.classList.add('has-session'); } catch (e) {}</script>
-  <link rel="stylesheet" href="styles.css?v=5.2">
+  <link rel="stylesheet" href="styles.css?v=5.3">
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -227,7 +227,7 @@
             <div class="card">
               <div class="filter-bar">
                 <div class="filter-row">
-                  <div class="search"><i data-ic="search" data-cls="sm"></i><input type="text" id="siteSearchInput" class="input" placeholder="Search site or author…"></div>
+                  <div class="search"><i data-ic="search" data-cls="sm"></i><input type="text" id="siteSearchInput" class="input" placeholder="Search site or username…"></div>
                   <select id="sitesMonthFilter" class="select select-sm" aria-label="Month"></select>
                   <span class="range-note" id="sitesRangeNote"></span>
                   <span class="grow"></span>
@@ -428,7 +428,7 @@
           <div class="form-grid">
             <div class="field"><label>Website name *</label><input type="text" id="siteName" class="input" placeholder="e.g. TechMoviez" required></div>
             <div class="field"><label>Website URL *</label><input type="text" id="siteUrl" class="input" placeholder="https://techmoviez.com/" required></div>
-            <div class="field"><label>Author / persona</label><input type="text" id="siteUsername" class="input" placeholder="e.g. Alex"></div>
+            <div class="field"><label>Username</label><input type="text" id="siteUsername" class="input" placeholder="e.g. Alex"></div>
             <div class="field"><label>Status</label>
               <select id="siteStatus" class="select"><option value="running">Running</option><option value="penalty">Penalty</option><option value="deleted">Deleted</option><option value="sold">Sold / dead</option></select>
             </div>
@@ -626,6 +626,6 @@
     <linearGradient id="gradBrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8272ff"/><stop offset="100%" stop-color="#f472b6"/></linearGradient>
   </defs></svg>
 
-  <script src="app.js?v=5.2"></script>
+  <script src="app.js?v=5.3"></script>
 </body>
 </html>

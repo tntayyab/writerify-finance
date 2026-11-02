@@ -1016,7 +1016,7 @@ NOTIFY pgrst, 'reload schema';`;
         <span class="rank-no">${i + 1}</span>
         <div class="rank-main">
           <a href="${esc(s.site_url)}" target="_blank" rel="noopener"><span>${esc(s.site_name || s.site_url)}</span>${ic('external', 'xs')}</a>
-          <small>${esc(s.username || 'No author')} · Ads ${formatMoney(s.ads)} · Amazon ${formatMoney(s.amazon)}</small>
+          <small>${esc(s.username || 'No username')} · Ads ${formatMoney(s.ads)} · Amazon ${formatMoney(s.amazon)}</small>
         </div>
         <div class="rank-val"><b>${formatMoney(s.total_income)}</b><small>Profit ${formatMoney(s.profit, true)}</small></div>
       </div>`).join('');
@@ -1105,7 +1105,7 @@ NOTIFY pgrst, 'reload schema';`;
     columns: [
       { key: 'idx', label: '#', align: 'center', width: '52px' },
       { key: 'name', label: 'Site', sortable: true, sortValue: (s) => siteName(s) },
-      { key: 'author', label: 'Author', sortable: true, sortValue: (s) => s.username || '' },
+      { key: 'username', label: 'Username', sortable: true, sortValue: (s) => s.username || '' },
       { key: 'status', label: 'Status', sortable: true, sortValue: (s) => s.status || '' },
       { key: 'tracking', label: 'Tracking ID', sortable: true, sortValue: (s) => s.amazon_tracking_id || '' },
       { key: 'account', label: 'Account', sortable: true, sortValue: (s) => s.amazon_account || '' },
