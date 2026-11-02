@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <script>try { if (localStorage.getItem('writerify_auth_token')) document.documentElement.classList.add('has-session'); } catch (e) {}</script>
-  <link rel="stylesheet" href="styles.css?v=5.1">
+  <link rel="stylesheet" href="styles.css?v=5.2">
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -61,10 +61,10 @@
           <div class="nav-label">Workspace</div>
           <a href="#missionSection" class="nav-item active" data-nav="mission"><i data-ic="home"></i><span>Mission Control</span></a>
           <a href="#sitesSection" class="nav-item" data-nav="sites"><i data-ic="globe"></i><span>Websites Portfolio</span><span class="nav-badge" id="sidebarSiteCount">0</span></a>
-          <a href="#incomeSection" class="nav-item" data-nav="income"><i data-ic="trend-up"></i><span>Income</span><span class="nav-new">NEW</span></a>
-          <a href="#expensesSection" class="nav-item" data-nav="expenses"><i data-ic="receipt"></i><span>Expenses Ledger</span></a>
-          <a href="#equitySection" class="nav-item" data-nav="equity"><i data-ic="pie"></i><span>Equity</span><span class="nav-new">NEW</span></a>
-          <a href="#financialsSection" class="nav-item" data-nav="financials"><i data-ic="chart"></i><span>Financial KPIs</span></a>
+          <a href="#incomeSection" class="nav-item" data-nav="income"><i data-ic="trend-up"></i><span>Incomes</span></a>
+          <a href="#expensesSection" class="nav-item" data-nav="expenses"><i data-ic="receipt"></i><span>Expenses</span></a>
+          <a href="#equitySection" class="nav-item" data-nav="equity"><i data-ic="pie"></i><span>Equity</span></a>
+          <a href="#financialsSection" class="nav-item" data-nav="financials"><i data-ic="chart"></i><span>Financial Overview</span></a>
         </nav>
 
         <div class="side-tools">
@@ -228,6 +228,8 @@
               <div class="filter-bar">
                 <div class="filter-row">
                   <div class="search"><i data-ic="search" data-cls="sm"></i><input type="text" id="siteSearchInput" class="input" placeholder="Search site or author…"></div>
+                  <select id="sitesMonthFilter" class="select select-sm" aria-label="Month"></select>
+                  <span class="range-note" id="sitesRangeNote"></span>
                   <span class="grow"></span>
                   <button id="openAddSiteModalBtn" class="btn btn-primary btn-sm"><i data-ic="plus" data-cls="sm"></i>Add site</button>
                 </div>
@@ -239,6 +241,7 @@
 
           <!-- ================= INCOME ================= -->
           <section id="incomeSection" class="section hidden" data-section="income">
+            <div class="card period-bar"><div class="period" id="incomePeriod"></div></div>
             <div id="incomeSetup" class="notice hidden">
               <i data-ic="alert"></i>
               <div style="min-width:0;flex:1">
@@ -274,7 +277,6 @@
                   <button id="openAddProductBtn" class="btn btn-ghost btn-sm"><i data-ic="plus" data-cls="sm"></i>New product</button>
                   <button id="openAddIncomeModalBtn" class="btn btn-income btn-sm"><i data-ic="plus" data-cls="sm"></i>Add income</button>
                 </div>
-                <div class="filter-row"><div class="period" id="incomePeriod"></div></div>
               </div>
               <div class="table-wrap"><table class="data" id="incomeTable"><thead></thead><tbody></tbody></table></div>
               <div class="pager" id="incomePager"></div>
@@ -283,6 +285,7 @@
 
           <!-- ================= EXPENSES ================= -->
           <section id="expensesSection" class="section hidden" data-section="expenses">
+            <div class="card period-bar"><div class="period" id="expensePeriod"></div></div>
             <div class="grid g-3 keep2">
               <div class="stat hl-bad"><div class="stat-top"><span class="stat-label">Total spend in range</span><span class="stat-ic bad"><i data-ic="receipt" data-cls="sm"></i></span></div><div class="stat-val num" id="ledgerTotalDisplay">$0</div><div class="stat-foot"><span id="expRangeLabel">—</span></div></div>
               <div class="stat"><div class="stat-top"><span class="stat-label">Entries</span><span class="stat-ic brand"><i data-ic="list" data-cls="sm"></i></span></div><div class="stat-val num" id="ledgerEntriesCount">0</div><div class="stat-foot"><span id="expAvg">Avg $0 / entry</span></div></div>
@@ -299,19 +302,6 @@
               </div>
             </div>
 
-            <div class="card card-pad" id="partnerCard">
-              <div class="card-head">
-                <div><div class="card-title">Partner accounts</div><div class="card-sub" id="psRange">—</div></div>
-              </div>
-              <div class="grid g-4 keep2">
-                <div class="stat"><div class="stat-top"><span class="stat-label">Company balance spent</span><span class="stat-ic brand"><i data-ic="wallet" data-cls="sm"></i></span></div><div class="stat-val num" id="psCompany">$0</div><div class="stat-foot"><span>paid from company funds</span></div></div>
-                <div class="stat hl-warn"><div class="stat-top"><span class="stat-label">Sazzad's own money</span><span class="stat-ic warn"><i data-ic="wallet" data-cls="sm"></i></span></div><div class="stat-val num" id="psSazzad">$0</div><div class="stat-foot"><span>personal balance used</span></div></div>
-                <div class="stat"><div class="stat-top"><span class="stat-label">Mustaqeem's own money</span><span class="stat-ic info"><i data-ic="wallet" data-cls="sm"></i></span></div><div class="stat-val num" id="psMustaqeem">$0</div><div class="stat-foot"><span>personal balance used</span></div></div>
-                <div class="stat"><div class="stat-top"><span class="stat-label">Paid by</span><span class="stat-ic good"><i data-ic="list" data-cls="sm"></i></span></div><div class="stat-val num" id="psPaidSazzad" style="font-size:18px">—</div><div class="stat-foot"><span id="psPaidMustaqeem">—</span></div></div>
-              </div>
-              <div class="settle" id="psSettle"></div>
-            </div>
-
             <div class="card">
               <div class="filter-bar">
                 <div class="filter-row">
@@ -323,7 +313,6 @@
                   <button id="exportExpensesCsvBtn" class="btn btn-ghost btn-sm"><i data-ic="download" data-cls="sm"></i><span class="btn-label">Export</span></button>
                   <button id="openAddCostModalBtn" class="btn btn-primary btn-sm"><i data-ic="plus" data-cls="sm"></i>Add cost</button>
                 </div>
-                <div class="filter-row"><div class="period" id="expensePeriod"></div></div>
               </div>
               <div class="table-wrap"><table class="data" id="expensesTable"><thead></thead><tbody></tbody></table></div>
               <div class="pager" id="expensesPager"></div>
@@ -637,6 +626,6 @@
     <linearGradient id="gradBrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8272ff"/><stop offset="100%" stop-color="#f472b6"/></linearGradient>
   </defs></svg>
 
-  <script src="app.js?v=5.1"></script>
+  <script src="app.js?v=5.2"></script>
 </body>
 </html>

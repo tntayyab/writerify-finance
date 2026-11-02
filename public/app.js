@@ -32,10 +32,10 @@
   const SECTIONS = {
     mission: ['Mission Control', 'Portfolio & revenue at a glance'],
     sites: ['Websites Portfolio', 'Every site, its domain, hosting and earnings'],
-    income: ['Income', 'Product-wise earnings across all your sites'],
-    expenses: ['Expenses Ledger', 'Hosting, domains, writers, tools & team'],
+    income: ['Incomes', 'Product-wise earnings across all your sites'],
+    expenses: ['Expenses', 'Hosting, domains, writers, tools & team'],
     equity: ['Equity', 'Partner balances, profit split and withdrawals'],
-    financials: ['Financial KPIs', 'Month, year and lifetime performance']
+    financials: ['Financial Overview', 'Month, year and lifetime performance']
   };
 
   const INCOME_SETUP_SQL = `CREATE TABLE IF NOT EXISTS income_entries (
@@ -207,6 +207,7 @@ NOTIFY pgrst, 'reload schema';`;
     kpiMonth: getCurrentMonthKey(),
     kpiSummary: null,
     sitesMonth: getCurrentMonthKey(),
+    sitesEarned: null,
     booted: false,
     equity: null,
     eqPick: '',
@@ -1007,7 +1008,7 @@ NOTIFY pgrst, 'reload schema';`;
     const box = $('topSitesContainer');
     const list = (top || []).filter((s) => s.total_income > 0);
     if (!list.length) {
-      box.innerHTML = `<div class="empty" style="padding:30px 10px"><p style="margin:0">No revenue recorded for ${esc(mLabel)} yet. Log an entry in <b>Income</b>.</p></div>`;
+      box.innerHTML = `<div class="empty" style="padding:30px 10px"><p style="margin:0">No revenue recorded for ${esc(mLabel)} yet. Log an entry in <b>Incomes</b>.</p></div>`;
       return;
     }
     box.innerHTML = list.map((s, i) => `
@@ -1048,7 +1049,7 @@ NOTIFY pgrst, 'reload schema';`;
     if (!box) return;
     $('ovProductsLabel').textContent = formatMonthLabel(state.activeMonth);
     if (state.incomeSetupRequired) {
-      box.innerHTML = `<div class="empty" style="padding:26px 10px"><p style="margin:0">Run the one-time SQL setup in the <b>Income</b> section to enable product-wise tracking.</p></div>`;
+      box.innerHTML = `<div class="empty" style="padding:26px 10px"><p style="margin:0">Run the one-time SQL setup in the <b>Incomes</b> section to enable product-wise tracking.</p></div>`;
       return;
     }
     const entries = state.income.filter((e) => e.month_key === state.activeMonth);
@@ -1089,6 +1090,7 @@ NOTIFY pgrst, 'reload schema';`;
     const q = state.siteSearch.trim().toLowerCase();
     return state.sites.filter((s) => {
       if (state.statusFilter !== 'all' && s.status !== state.statusFilter) return false;
+      if (state.sitesEarned && !state.sitesEarned.has(s.id)) return false;
       if (!q) return true;
       return [s.site_name, s.site_url, s.username].some((v) => String(v || '').toLowerCase().includes(q));
     });
@@ -1135,7 +1137,7 @@ NOTIFY pgrst, 'reload schema';`;
       if (!state.sites.length) {
         return `<div class="empty"><div class="empty-ic">${ic('globe', 'lg')}</div><h4>No websites yet</h4><p>Your portfolio is clean and ready. Add your first website to begin tracking.</p><button class="btn btn-primary btn-sm" onclick="document.getElementById('openAddSiteModalBtn').click()">${ic('plus', 'sm')}Add your first website</button></div>`;
       }
-      return `<div class="empty"><div class="empty-ic">${ic('search', 'lg')}</div><h4>No sites match</h4><p>Try a different status tab or clear your search.</p></div>`;
+      return `<div class="empty"><div class="empty-ic">${ic('search', 'lg')}</div><h4>No sites match</h4><p>Try a different status tab or month, or clear your search.</p></div>`;
     },
     async onAction(act, id) {
       const site = state.sites.find((s) => String(s.id) === String(id));
@@ -1440,44 +1442,10 @@ NOTIFY pgrst, 'reload schema';`;
     const top = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
     $('expTop').textContent = top ? (CATEGORIES[top[0]] || top[0]) : '—';
     $('expTopFoot').textContent = top ? `${bdt(top[1])} · ${totalBdt ? Math.round((top[1] / totalBdt) * 100) : 0}% of spend` : 'No spend in range';
-    renderPartnerSplit();
-    expensesTable.render();
-  }
-
-  // Who funded what, and who owes whom (50/50 partners) for the selected date range
-  function renderPartnerSplit() {
-    const rows = state.expenses.filter((e) => expensePeriod.match(e.expense_date));
-    const sum = (f) => rows.filter(f).reduce((a, e) => a + bdtVal(e), 0);
-    const fund = (e) => e.fund_source || 'company';
-    const company = sum((e) => fund(e) === 'company');
-    const sz = sum((e) => fund(e) === 'sazzad');
-    const mq = sum((e) => fund(e) === 'mustaqeem');
-    const paidSz = sum((e) => e.paid_by === 'Sazzad');
-    const paidMq = sum((e) => e.paid_by === 'Mustaqeem');
-
-    $('psRange').textContent = expensePeriod.describe() + ' · ' + plural(rows.length, 'expense');
-    $('psCompany').textContent = bdt(company);
-    $('psSazzad').textContent = bdt(sz);
-    $('psMustaqeem').textContent = bdt(mq);
-    $('psPaidSazzad').textContent = 'Sazzad ' + bdt(paidSz);
-    $('psPaidMustaqeem').textContent = 'Mustaqeem ' + bdt(paidMq);
-
-    const diff = (sz - mq) / 2;
-    const box = $('psSettle');
-    if (Math.abs(diff) < 0.005) {
-      box.className = 'settle even';
-      box.innerHTML = sz || mq ? '<b>All settled between partners</b> — both used the same amount of personal money.' : 'No personal-money expenses in this range. Everything came from the company balance.';
-    } else {
-      const debtor = diff > 0 ? 'Mustaqeem' : 'Sazzad';
-      const creditor = diff > 0 ? 'Sazzad' : 'Mustaqeem';
-      box.className = 'settle owe';
-      box.innerHTML = '<b>' + debtor + ' owes ' + creditor + ' ' + bdt(Math.abs(diff)) + '</b> to split personal spending 50/50.' +
-        '<small>≈ ' + money2(Math.abs(diff) / state.rate) + ' · Or reimburse from the company balance instead: Sazzad ' + bdt(sz) + ' · Mustaqeem ' + bdt(mq) + '</small>';
-    }
-
     const sample = state.expenses[0];
     $('expSetup').classList.toggle('hidden', !(state.partnerSetupNeeded || (sample && !('paid_by' in sample))));
     $('expSetupSql').textContent = EXPENSE_PARTNER_SQL;
+    expensesTable.render();
   }
 
   function openCostModal(e) {
@@ -2012,6 +1980,23 @@ NOTIFY pgrst, 'reload schema';`;
     kpiSel.value = state.kpiMonth;
     missionSel.addEventListener('change', () => { state.activeMonth = missionSel.value; loadSummary(); renderOverviewProducts(); });
     kpiSel.addEventListener('change', () => { state.kpiMonth = kpiSel.value; loadKpis(); });
+
+    // Websites: a month narrows the list to the sites that earned in it
+    const sitesSel = $('sitesMonthFilter');
+    fillMonthSelect(sitesSel, 'All months');
+    sitesSel.addEventListener('change', async () => {
+      const key = sitesSel.value;
+      let earned = null;
+      if (key) {
+        const data = await apiFetch(`/api/sites?status=all&month=${key}`);
+        if (!data || !data.success || sitesSel.value !== key) return;
+        earned = new Set((data.sites || []).filter((s) => s.total_income > 0).map((s) => s.id));
+      }
+      state.sitesEarned = earned;
+      $('sitesRangeNote').textContent = earned ? `${plural(earned.size, 'site')} earned in ${formatMonthLabel(key)}` : '';
+      sitesTable.resetPage();
+      sitesTable.render();
+    });
 
     // Equity
     $('eqPartners').addEventListener('click', (e) => {
