@@ -151,6 +151,205 @@ function buildEquityMonths(income, metrics, expenses, withdrawals, rate) {
   return Object.values(months).sort((a, b) => a.month_key.localeCompare(b.month_key));
 }
 
+function buildEquity(income, metrics, expenses, withdrawalsRaw, rate) {
+  const withdrawals = (withdrawalsRaw || []).map((w) => ({ ...w, amount_bdt: parseFloat(w.amount_bdt) || 0, amount: parseFloat(w.amount) || 0 }));
+  return {
+    success: true,
+    setupRequired: withdrawalsRaw === null,
+    rate,
+    months: buildEquityMonths(income || [], metrics || [], expenses || [], withdrawals, rate),
+    withdrawals
+  };
+}
+
+// Sites joined with their summed metrics and income entries
+function buildSiteList(sites, metrics, incomeRows, inRange) {
+  const agg = {};
+  for (const m of (metrics || [])) {
+    const a = agg[m.site_id] || (agg[m.site_id] = { ads: 0, amazon: 0, other: 0, cost: 0, articles: 0, notes: '' });
+    a.ads += parseFloat(m.ads_income) || 0;
+    a.amazon += parseFloat(m.amazon_income) || 0;
+    a.other += parseFloat(m.other_income) || 0;
+    a.cost += parseFloat(m.cost) || 0;
+    a.articles += parseInt(m.articles_count, 10) || 0;
+    a.notes = m.notes || a.notes;
+  }
+  const entryBySite = {};
+  for (const i of (Array.isArray(incomeRows) ? incomeRows : [])) {
+    if (i.site_id && i.month_key && inRange(i.month_key)) {
+      entryBySite[i.site_id] = (entryBySite[i.site_id] || 0) + (parseFloat(i.amount) || 0);
+    }
+  }
+
+  return (sites || []).map(s => {
+    const a = agg[s.id] || { ads: 0, amazon: 0, other: 0, cost: 0, articles: 0, notes: '' };
+    const entry = entryBySite[s.id] || 0;
+    const total = a.ads + a.amazon + a.other + entry;
+    return {
+      id: s.id,
+      site_url: s.site_url,
+      site_name: s.site_name,
+      username: s.username,
+      status: s.status,
+      domain_registrar: s.domain_registrar || '',
+      hosting_provider: s.hosting_provider || '',
+      domain_expiry: s.domain_expiry || '',
+      amazon_account: s.amazon_account || '',
+      amazon_tracking_id: s.amazon_tracking_id || '',
+      articles_count: a.articles,
+      cost: a.cost,
+      ads_income: a.ads,
+      amazon_income: a.amazon,
+      other_income: a.other,
+      entry_income: entry,
+      total_income: total,
+      profit: total - a.cost,
+      notes: a.notes
+    };
+  });
+}
+
+// Dashboard totals for one month, from already-loaded tables
+function buildSummary({ sites, metrics, expenses, settings, income }, currentMonthKey) {
+  const now = new Date();
+  const [curYear, curMonth] = currentMonthKey.split('-').map(Number);
+
+  const lastMonthDate = new Date(Date.UTC(curYear, curMonth - 2, 1));
+  const lastMonthKey = lastMonthDate.toISOString().slice(0, 7);
+  const thisYearPrefix = `${curYear}-`;
+  const lastYearPrefix = `${curYear - 1}-`;
+
+  const allSites = sites || [];
+  const allMetrics = metrics || [];
+  const allExpenses = expenses || [];
+  const allSettings = settings || [];
+  const allIncome = Array.isArray(income) ? income : [];
+
+  const num = (v) => parseFloat(v) || 0;
+
+  // Single aggregation pass: site metrics + product income entries (income) vs site cost + ledger (cost)
+  function aggregate(inRange) {
+    let ads = 0, amazon = 0, other = 0, product = 0, siteCost = 0, articles = 0, ledgerCost = 0;
+    for (const m of allMetrics) {
+      if (!m.month_key || !inRange(m.month_key)) continue;
+      ads += num(m.ads_income);
+      amazon += num(m.amazon_income);
+      other += num(m.other_income);
+      siteCost += num(m.cost);
+      articles += parseInt(m.articles_count, 10) || 0;
+    }
+    for (const i of allIncome) {
+      if (i.month_key && inRange(i.month_key)) product += num(i.amount);
+    }
+    for (const e of allExpenses) {
+      if (e.month_key && inRange(e.month_key)) ledgerCost += num(e.amount);
+    }
+    const income = ads + amazon + other + product;
+    const cost = siteCost + ledgerCost;
+    return { income, cost, profit: income - cost, ads, amazon, other, product, articles };
+  }
+
+  const getMetricsForMonth = (monthKey) => aggregate((mk) => mk === monthKey);
+  const getMetricsForYear = (yearPrefix) => aggregate((mk) => mk.startsWith(yearPrefix));
+  const getLifetimeMetrics = () => aggregate(() => true);
+
+  const thisMonth = getMetricsForMonth(currentMonthKey);
+  const lastMonth = getMetricsForMonth(lastMonthKey);
+  const thisYear = getMetricsForYear(thisYearPrefix);
+  const lastYear = getMetricsForYear(lastYearPrefix);
+  const lifetime = getLifetimeMetrics();
+
+  const statusCounts = { running: 0, penalty: 0, deleted: 0, sold: 0 };
+  allSites.forEach(s => {
+    if (statusCounts[s.status] !== undefined) statusCounts[s.status]++;
+  });
+
+  const trend12Months = [];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(curYear, curMonth - 1 - i, 1));
+    const mKey = d.toISOString().slice(0, 7);
+    const mLabel = `${monthNames[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`;
+    const mMetrics = getMetricsForMonth(mKey);
+    trend12Months.push({
+      month_key: mKey,
+      label: mLabel,
+      income: mMetrics.income,
+      cost: mMetrics.cost,
+      profit: mMetrics.profit,
+      ads: mMetrics.ads,
+      amazon: mMetrics.amazon
+    });
+  }
+
+  // Top Sites
+  const topSites = allSites.map(s => {
+    const m = allMetrics.find(metric => String(metric.site_id) === String(s.id) && metric.month_key === currentMonthKey) || {};
+    const ads = parseFloat(m.ads_income) || 0;
+    const amazon = parseFloat(m.amazon_income) || 0;
+    const entries = allIncome
+      .filter(i => String(i.site_id) === String(s.id) && i.month_key === currentMonthKey)
+      .reduce((sum, i) => sum + num(i.amount), 0);
+    const other = (parseFloat(m.other_income) || 0) + entries;
+    const cost = parseFloat(m.cost) || 0;
+    const total = ads + amazon + other;
+    return {
+      id: s.id,
+      site_url: s.site_url,
+      site_name: s.site_name,
+      username: s.username,
+      status: s.status,
+      ads,
+      amazon,
+      other,
+      total_income: total,
+      cost,
+      profit: total - cost
+    };
+  }).sort((a, b) => b.total_income - a.total_income).slice(0, 5);
+
+  const daysInMonth = new Date(curYear, curMonth, 0).getDate();
+  let daysLeft = daysInMonth;
+  if (curYear === now.getFullYear() && (curMonth - 1) === now.getMonth()) {
+    daysLeft = Math.max(1, daysInMonth - now.getDate());
+  }
+
+  let goalSites = 500;
+  let goalMonthlyIncome = 15000;
+  const sSites = allSettings.find(s => s.key === 'goal_sites');
+  const sIncome = allSettings.find(s => s.key === 'goal_monthly_income');
+  if (sSites) goalSites = parseInt(sSites.value, 10);
+  if (sIncome) goalMonthlyIncome = parseFloat(sIncome.value);
+
+  const remainingIncomeGoal = Math.max(0, goalMonthlyIncome - thisMonth.income);
+  const dailyRunRateNeeded = daysLeft > 0 ? (remainingIncomeGoal / daysLeft) : 0;
+
+  return {
+    success: true,
+    month: currentMonthKey,
+    goalSites,
+    goalMonthlyIncome,
+    daysLeft,
+    dailyRunRateNeeded,
+    thisMonth,
+    lastMonth,
+    thisYear,
+    lastYear,
+    lifetime,
+    statusCounts,
+    totalSites: allSites.length,
+    trend12Months,
+    topSites,
+    incomeMix: {
+      ads: thisMonth.ads,
+      amazon: thisMonth.amazon,
+      other: thisMonth.other,
+      product: thisMonth.product,
+      total: thisMonth.income
+    }
+  };
+}
+
 function withdrawalPayload(body) {
   const date = String(body.withdrawal_date || '').slice(0, 10);
   const partner = ['Mustaqeem', 'Sazzad'].find((p) => p === body.partner);
@@ -303,154 +502,52 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, message: 'Mission targets updated' });
     }
 
+    // GET /api/bootstrap: everything the first screen needs, from one read of each table
+    if (pathname === '/api/bootstrap' && method === 'GET') {
+      const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+      const rate = parseFloat(url.searchParams.get('rate')) || 125;
+      const orNull = (err) => { if (isMissingTable(err)) return null; throw err; };
+      const [sites, metrics, expenses, settings, income, withdrawals] = await Promise.all([
+        sbFetch(env, '/sites?select=*&order=id.asc'),
+        sbFetch(env, '/monthly_site_metrics?select=*'),
+        sbFetch(env, '/expenses_ledger?select=*&order=expense_date.desc'),
+        sbFetch(env, '/settings?select=*'),
+        sbFetch(env, '/income_entries?select=*&order=income_date.desc,id.desc').catch(orNull),
+        sbFetch(env, '/partner_withdrawals?select=*&order=withdrawal_date.desc,id.desc').catch(orNull)
+      ]);
+      const names = {};
+      for (const site of sites) names[site.id] = site.site_name || site.site_url;
+      let products = [];
+      try { products = JSON.parse((settings.find((r) => r.key === 'custom_products') || {}).value || '[]'); } catch { products = []; }
+      return jsonResponse({
+        success: true,
+        summary: buildSummary({ sites, metrics, expenses, settings, income: income || [] }, month),
+        sites: { success: true, sites: buildSiteList(sites, metrics, income || [], () => true) },
+        income: {
+          success: true,
+          setupRequired: income === null,
+          entries: (income || []).map((e) => ({ ...e, site_name: e.site_id ? (names[e.site_id] || `Site #${e.site_id}`) : '' })),
+          products
+        },
+        expenses: {
+          success: true,
+          expenses: expenses.map((e) => ({ ...e, site_name: e.site_id ? (names[e.site_id] || `Site #${e.site_id}`) : 'Global / Operations' }))
+        },
+        equity: buildEquity(income, metrics, expenses, withdrawals, rate)
+      });
+    }
+
     // GET /api/mission/summary
     if (pathname === '/api/mission/summary' && method === 'GET') {
-      const now = new Date();
-      const currentMonthKey = url.searchParams.get('month') || now.toISOString().slice(0, 7);
-      const [curYear, curMonth] = currentMonthKey.split('-').map(Number);
-
-      const lastMonthDate = new Date(Date.UTC(curYear, curMonth - 2, 1));
-      const lastMonthKey = lastMonthDate.toISOString().slice(0, 7);
-      const thisYearPrefix = `${curYear}-`;
-      const lastYearPrefix = `${curYear - 1}-`;
-
-      const [sites, metrics, expenses, settings, incomeRows] = await Promise.all([
+      const currentMonthKey = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+      const [sites, metrics, expenses, settings, income] = await Promise.all([
         sbFetch(env, '/sites?select=id,site_url,site_name,username,status').catch(() => []),
         sbFetch(env, '/monthly_site_metrics?select=*').catch(() => []),
         sbFetch(env, '/expenses_ledger?select=*').catch(() => []),
         sbFetch(env, '/settings?select=*').catch(() => []),
         sbFetch(env, '/income_entries?select=*').catch(() => [])
       ]);
-
-      const allSites = sites || [];
-      const allMetrics = metrics || [];
-      const allExpenses = expenses || [];
-      const allSettings = settings || [];
-      const allIncome = Array.isArray(incomeRows) ? incomeRows : [];
-
-      const num = (v) => parseFloat(v) || 0;
-
-      // Single aggregation pass: site metrics + product income entries (income) vs site cost + ledger (cost)
-      function aggregate(inRange) {
-        let ads = 0, amazon = 0, other = 0, product = 0, siteCost = 0, articles = 0, ledgerCost = 0;
-        for (const m of allMetrics) {
-          if (!m.month_key || !inRange(m.month_key)) continue;
-          ads += num(m.ads_income);
-          amazon += num(m.amazon_income);
-          other += num(m.other_income);
-          siteCost += num(m.cost);
-          articles += parseInt(m.articles_count, 10) || 0;
-        }
-        for (const i of allIncome) {
-          if (i.month_key && inRange(i.month_key)) product += num(i.amount);
-        }
-        for (const e of allExpenses) {
-          if (e.month_key && inRange(e.month_key)) ledgerCost += num(e.amount);
-        }
-        const income = ads + amazon + other + product;
-        const cost = siteCost + ledgerCost;
-        return { income, cost, profit: income - cost, ads, amazon, other, product, articles };
-      }
-
-      const getMetricsForMonth = (monthKey) => aggregate((mk) => mk === monthKey);
-      const getMetricsForYear = (yearPrefix) => aggregate((mk) => mk.startsWith(yearPrefix));
-      const getLifetimeMetrics = () => aggregate(() => true);
-
-      const thisMonth = getMetricsForMonth(currentMonthKey);
-      const lastMonth = getMetricsForMonth(lastMonthKey);
-      const thisYear = getMetricsForYear(thisYearPrefix);
-      const lastYear = getMetricsForYear(lastYearPrefix);
-      const lifetime = getLifetimeMetrics();
-
-      const statusCounts = { running: 0, penalty: 0, deleted: 0, sold: 0 };
-      allSites.forEach(s => {
-        if (statusCounts[s.status] !== undefined) statusCounts[s.status]++;
-      });
-
-      const trend12Months = [];
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(Date.UTC(curYear, curMonth - 1 - i, 1));
-        const mKey = d.toISOString().slice(0, 7);
-        const mLabel = `${monthNames[d.getUTCMonth()]} ${String(d.getUTCFullYear()).slice(2)}`;
-        const mMetrics = getMetricsForMonth(mKey);
-        trend12Months.push({
-          month_key: mKey,
-          label: mLabel,
-          income: mMetrics.income,
-          cost: mMetrics.cost,
-          profit: mMetrics.profit,
-          ads: mMetrics.ads,
-          amazon: mMetrics.amazon
-        });
-      }
-
-      // Top Sites
-      const topSites = allSites.map(s => {
-        const m = allMetrics.find(metric => String(metric.site_id) === String(s.id) && metric.month_key === currentMonthKey) || {};
-        const ads = parseFloat(m.ads_income) || 0;
-        const amazon = parseFloat(m.amazon_income) || 0;
-        const entries = allIncome
-          .filter(i => String(i.site_id) === String(s.id) && i.month_key === currentMonthKey)
-          .reduce((sum, i) => sum + num(i.amount), 0);
-        const other = (parseFloat(m.other_income) || 0) + entries;
-        const cost = parseFloat(m.cost) || 0;
-        const total = ads + amazon + other;
-        return {
-          id: s.id,
-          site_url: s.site_url,
-          site_name: s.site_name,
-          username: s.username,
-          status: s.status,
-          ads,
-          amazon,
-          other,
-          total_income: total,
-          cost,
-          profit: total - cost
-        };
-      }).sort((a, b) => b.total_income - a.total_income).slice(0, 5);
-
-      const daysInMonth = new Date(curYear, curMonth, 0).getDate();
-      let daysLeft = daysInMonth;
-      if (curYear === now.getFullYear() && (curMonth - 1) === now.getMonth()) {
-        daysLeft = Math.max(1, daysInMonth - now.getDate());
-      }
-
-      let goalSites = 500;
-      let goalMonthlyIncome = 15000;
-      const sSites = allSettings.find(s => s.key === 'goal_sites');
-      const sIncome = allSettings.find(s => s.key === 'goal_monthly_income');
-      if (sSites) goalSites = parseInt(sSites.value, 10);
-      if (sIncome) goalMonthlyIncome = parseFloat(sIncome.value);
-
-      const remainingIncomeGoal = Math.max(0, goalMonthlyIncome - thisMonth.income);
-      const dailyRunRateNeeded = daysLeft > 0 ? (remainingIncomeGoal / daysLeft) : 0;
-
-      return jsonResponse({
-        success: true,
-        month: currentMonthKey,
-        goalSites,
-        goalMonthlyIncome,
-        daysLeft,
-        dailyRunRateNeeded,
-        thisMonth,
-        lastMonth,
-        thisYear,
-        lastYear,
-        lifetime,
-        statusCounts,
-        totalSites: allSites.length,
-        trend12Months,
-        topSites,
-        incomeMix: {
-          ads: thisMonth.ads,
-          amazon: thisMonth.amazon,
-          other: thisMonth.other,
-          product: thisMonth.product,
-          total: thisMonth.income
-        }
-      });
+      return jsonResponse(buildSummary({ sites, metrics, expenses, settings, income }, currentMonthKey));
     }
 
     // GET /api/sites  (?month=YYYY-MM | ?from=YYYY-MM&to=YYYY-MM | ?range=all)
@@ -480,49 +577,7 @@ export async function onRequest(context) {
         sbFetch(env, '/income_entries?select=site_id,amount,month_key').catch(() => [])
       ]);
 
-      const agg = {};
-      for (const m of (metrics || [])) {
-        const a = agg[m.site_id] || (agg[m.site_id] = { ads: 0, amazon: 0, other: 0, cost: 0, articles: 0, notes: '' });
-        a.ads += parseFloat(m.ads_income) || 0;
-        a.amazon += parseFloat(m.amazon_income) || 0;
-        a.other += parseFloat(m.other_income) || 0;
-        a.cost += parseFloat(m.cost) || 0;
-        a.articles += parseInt(m.articles_count, 10) || 0;
-        a.notes = m.notes || a.notes;
-      }
-      const entryBySite = {};
-      for (const i of (Array.isArray(incomeRows) ? incomeRows : [])) {
-        if (i.site_id && i.month_key && inRange(i.month_key)) {
-          entryBySite[i.site_id] = (entryBySite[i.site_id] || 0) + (parseFloat(i.amount) || 0);
-        }
-      }
-
-      let siteList = (sites || []).map(s => {
-        const a = agg[s.id] || { ads: 0, amazon: 0, other: 0, cost: 0, articles: 0, notes: '' };
-        const entry = entryBySite[s.id] || 0;
-        const total = a.ads + a.amazon + a.other + entry;
-        return {
-          id: s.id,
-          site_url: s.site_url,
-          site_name: s.site_name,
-          username: s.username,
-          status: s.status,
-          domain_registrar: s.domain_registrar || '',
-          hosting_provider: s.hosting_provider || '',
-          domain_expiry: s.domain_expiry || '',
-          amazon_account: s.amazon_account || '',
-          amazon_tracking_id: s.amazon_tracking_id || '',
-          articles_count: a.articles,
-          cost: a.cost,
-          ads_income: a.ads,
-          amazon_income: a.amazon,
-          other_income: a.other,
-          entry_income: entry,
-          total_income: total,
-          profit: total - a.cost,
-          notes: a.notes
-        };
-      });
+      let siteList = buildSiteList(sites, metrics, incomeRows, inRange);
 
       if (status && status !== 'all') {
         siteList = siteList.filter(s => s.status === status);
@@ -859,14 +914,7 @@ export async function onRequest(context) {
         sbFetch(env, '/expenses_ledger?select=*'),
         sbFetch(env, '/partner_withdrawals?select=*&order=withdrawal_date.desc,id.desc').catch((err) => { if (isMissingTable(err)) return null; throw err; })
       ]);
-      const withdrawals = (withdrawalsRaw || []).map((w) => ({ ...w, amount_bdt: parseFloat(w.amount_bdt) || 0, amount: parseFloat(w.amount) || 0 }));
-      return jsonResponse({
-        success: true,
-        setupRequired: withdrawalsRaw === null,
-        rate,
-        months: buildEquityMonths(income || [], metrics || [], expenses || [], withdrawals, rate),
-        withdrawals
-      });
+      return jsonResponse(buildEquity(income, metrics, expenses, withdrawalsRaw, rate));
     }
 
     if (pathname === '/api/withdrawals' && method === 'POST') {

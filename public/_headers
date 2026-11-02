@@ -1,0 +1,5 @@
+# Asset URLs carry ?v=, so a browser never needs to re-check them
+/app.js
+  Cache-Control: public, max-age=31536000, immutable
+/styles.css
+  Cache-Control: public, max-age=31536000, immutable

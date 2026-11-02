@@ -273,7 +273,8 @@ body.sidebar-collapsed .main { margin-left: 0; }
 .month-pill { display: none; padding: 6px 12px; border-radius: 99px; font-weight: 800; font-size: 12px; background: var(--brand-soft); color: var(--brand); }
 
 .content { padding: 24px 28px 64px; max-width: 1440px; margin: 0 auto; }
-.section { display: flex; flex-direction: column; gap: 18px; animation: rise 0.35s ease both; }
+.section { display: flex; flex-direction: column; gap: 18px; }
+.section.enter { animation: rise 0.35s ease both; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Hero (mission) ---------- */
@@ -554,9 +555,24 @@ table.data tr.row-alert { background: var(--bad-soft); }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
-/* Sites table: keep the domain column readable */
-#sitesTable td:nth-child(4) { min-width: 250px; }
-#sitesTable td:nth-child(2) { min-width: 190px; }
+/* Sites table: one fact per column, never wrapped */
+#sitesTable th, #sitesTable td { white-space: nowrap; padding-left: 7px; padding-right: 7px; }
+.cell-plain { color: var(--text-2); }
+
+/* Site Income split in the income modal */
+.split-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.input[readonly] { background: var(--surface-2); cursor: default; }
+
+/* First load with nothing cached: placeholders instead of zeros */
+.has-session #loginScreen { display: none; }
+body:not(.is-booting) .boot-skel { display: none; }
+body.is-booting .section { display: none !important; }
+.boot-skel { display: flex; flex-direction: column; gap: 18px; }
+.sk-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
+.sk { display: block; height: 120px; border-radius: 18px; background: linear-gradient(100deg, var(--surface-2) 40%, var(--line) 50%, var(--surface-2) 60%); background-size: 200% 100%; animation: skShine 1.2s linear infinite; }
+.sk-tall { height: 300px; }
+.sk-wide { height: 180px; }
+@keyframes skShine { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* Pricing block in the income modal */
 .pricing-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -618,9 +634,11 @@ table.data tr.row-flash td { animation: flash 2.2s ease-out; }
 .eq-p-lines b { font-weight: 800; color: var(--text); }
 .eq-arc { transition: opacity 0.15s; cursor: pointer; }
 .eq-arc.dim { opacity: 0.25; }
-.eq-bar { transform-box: fill-box; transform-origin: bottom; animation: eqGrow 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both; animation-delay: var(--d, 0ms); }
+.eq-bar { transform-box: fill-box; transform-origin: bottom; }
+.section.enter .eq-bar { animation: eqGrow 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both; animation-delay: var(--d, 0ms); }
 @keyframes eqGrow { from { transform: scaleY(0); } }
-.eq-line { stroke-dasharray: 1; animation: eqDraw 1s ease-out both; }
+.eq-line { stroke-dasharray: 1; }
+.section.enter .eq-line { animation: eqDraw 1s ease-out both; }
 @keyframes eqDraw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 .eq-statement-head { padding: 14px 16px 10px; }
 #eqStatement td:first-child { font-weight: 600; color: var(--text-2); }

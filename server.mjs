@@ -400,6 +400,19 @@ const server = http.createServer(async (req, res) => {
         });
       }
     }
+    // API: BOOTSTRAP (same payload as the cloud route, composed from the routes below)
+    if (pathname === '/api/bootstrap' && req.method === 'GET') {
+      const sp = parsedUrl.searchParams;
+      const month = sp.get('month') || new Date().toISOString().slice(0, 7);
+      const rate = sp.get('rate') || '125';
+      const get = (p) => fetch(`http://127.0.0.1:${PORT}${p}`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+      const [summary, sites, income, productList, expenses, equity] = await Promise.all([
+        get(`/api/mission/summary?month=${month}`), get('/api/sites?status=all&range=all'), get('/api/income'),
+        get('/api/products'), get('/api/expenses?range=all'), get(`/api/equity?rate=${rate}`)
+      ]);
+      return sendJson(res, 200, { success: true, summary, sites, income: { ...income, products: productList.products || [] }, expenses, equity });
+    }
+
     // API: TARGETS (GET / POST)
     if (pathname === '/api/targets' && req.method === 'GET') {
       const goalSites = parseInt(getSetting('goal_sites', '500'), 10);

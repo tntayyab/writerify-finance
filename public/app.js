@@ -207,13 +207,13 @@ NOTIFY pgrst, 'reload schema';`;
     kpiMonth: getCurrentMonthKey(),
     kpiSummary: null,
     sitesMonth: getCurrentMonthKey(),
+    booted: false,
     equity: null,
     eqPick: '',
     eqPartner: '',
     activeSection: 'mission',
     summary: null,
     sites: [],
-    sitesEditable: true,
     income: [],
     incomeSetupRequired: false,
     products: [],
@@ -241,6 +241,7 @@ NOTIFY pgrst, 'reload schema';`;
   }
 
   function showLoginScreen() {
+    document.documentElement.classList.remove('has-session');
     $('loginScreen').classList.remove('hidden');
     $('appContainer').style.display = 'none';
   }
@@ -250,6 +251,7 @@ NOTIFY pgrst, 'reload schema';`;
   }
   function handleLogout() {
     setAuthToken(null);
+    clearSnapshot();
     showLoginScreen();
     showToast('Signed out safely', 'info');
   }
@@ -261,6 +263,7 @@ NOTIFY pgrst, 'reload schema';`;
       const res = await fetch(endpoint, { ...options, headers });
       if (res.status === 401) {
         setAuthToken(null);
+        clearSnapshot();
         showLoginScreen();
         throw new Error('Session expired. Please sign in again.');
       }
@@ -333,10 +336,8 @@ NOTIFY pgrst, 'reload schema';`;
         setAuthToken(data.token);
         try { localStorage.setItem('writerify_last_email', email); } catch (_) { /* ignore */ }
         loginPassword.value = '';
-        showAppContainer();
-        setupEventListeners();
         showToast('Welcome back 👑');
-        await loadAllData();
+        await startApp();
       } catch (err) {
         $('loginErrorText').textContent = err.message || 'Invalid credentials';
         loginError.classList.remove('hidden');
@@ -666,48 +667,107 @@ NOTIFY pgrst, 'reload schema';`;
   /* =====================================================================
      Loaders
      ===================================================================== */
+  // Last good API responses, kept on this device so a reload paints real numbers at once
+  const SNAPSHOT_KEY = 'wf_snapshot_v1';
+  let snapshot = {};
+  let snapshotTimer = null;
+
+  function saveSnapshot(part, data) {
+    snapshot[part] = data;
+    clearTimeout(snapshotTimer);
+    snapshotTimer = setTimeout(() => {
+      try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot)); } catch (_) { /* full or blocked: next reload just loads from the API */ }
+    }, 300);
+  }
+
+  function clearSnapshot() {
+    clearTimeout(snapshotTimer);
+    snapshot = {};
+    try { localStorage.removeItem(SNAPSHOT_KEY); } catch (_) { /* ignore */ }
+  }
+
+  function paintSnapshot() {
+    try {
+      const snap = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+      if (!snap || !snap.summary || snap.summary.month !== state.activeMonth || !snap.sites || !snap.income || !snap.expenses || !snap.equity) return false;
+      snapshot = snap;
+      applySummary(snap.summary);
+      applyKpis(snap.summary);
+      applySites(snap.sites);
+      applyIncome(snap.income);
+      applyExpenses(snap.expenses);
+      applyEquity(snap.equity);
+      renderOverviewProducts();
+      return true;
+    } catch (_) {
+      clearSnapshot();
+      return false;
+    }
+  }
+
+  // One request for the whole app; a part is redrawn only if it differs from what is on screen
   async function loadAllData() {
-    await Promise.all([loadSummary(), loadKpis(), loadSites(), loadIncome(), loadExpenses(), loadEquity()]);
-    renderOverviewProducts();
+    const fresh = await apiFetch(`/api/bootstrap?month=${state.activeMonth}&rate=${state.rate}`);
+    if (fresh && fresh.success) {
+      const changed = (part) => {
+        if (JSON.stringify(snapshot[part]) === JSON.stringify(fresh[part])) return false;
+        saveSnapshot(part, fresh[part]);
+        return true;
+      };
+      if (changed('summary')) {
+        applySummary(fresh.summary);
+        if (state.kpiMonth === state.activeMonth) applyKpis(fresh.summary);
+      }
+      if (state.kpiMonth !== state.activeMonth) loadKpis();
+      if (changed('sites')) applySites(fresh.sites);
+      if (changed('income')) { applyIncome(fresh.income); renderOverviewProducts(); }
+      if (changed('expenses')) applyExpenses(fresh.expenses);
+      if (changed('equity')) applyEquity(fresh.equity);
+    }
+    state.booted = true;
+    document.body.classList.remove('is-booting');
+  }
+
+  function applySummary(data) {
+    state.summary = data;
+    renderSummary();
   }
 
   async function loadSummary() {
     const data = await apiFetch(`/api/mission/summary?month=${state.activeMonth}`);
     if (!data || !data.success) return;
-    state.summary = data;
-    renderSummary();
+    applySummary(data);
+    if (data.month === getCurrentMonthKey()) saveSnapshot('summary', data);
+  }
+
+  function applyKpis(data) {
+    state.kpiSummary = data;
+    renderKpis();
   }
 
   async function loadKpis() {
     const data = await apiFetch(`/api/mission/summary?month=${state.kpiMonth}`);
     if (!data || !data.success) return;
-    state.kpiSummary = data;
-    renderKpis();
+    applyKpis(data);
   }
 
-  async function loadSites() {
-    const r = sitesPeriod.range();
-    const preset = sitesPeriod.preset();
-    let q = '';
-    if (preset === 'lifetime' || (!r.from && !r.to)) q = 'range=all';
-    else q = `from=${r.from ? r.from.slice(0, 7) : ''}&to=${r.to ? r.to.slice(0, 7) : ''}`;
-    const data = await apiFetch(`/api/sites?status=all&${q}`);
-    if (!data || !data.success) return;
+  function applySites(data) {
     state.sites = data.sites || [];
-    state.sitesEditable = data.editable !== false;
-    state.sitesMonth = state.sitesEditable && r.from ? r.from.slice(0, 7) : getCurrentMonthKey();
     $('sidebarSiteCount').textContent = state.sites.length;
-    $('sitesRangeNote').textContent = state.sitesEditable ? 'Click an amount to edit — saves automatically' : 'Aggregated view — switch to a single month to edit amounts';
     renderStatusCounts();
     sitesTable.render();
     fillSiteSelects();
   }
 
-  async function loadIncome() {
-    const data = await apiFetch('/api/income');
+  async function loadSites() {
+    const data = await apiFetch('/api/sites?status=all&range=all');
     if (!data || !data.success) return;
-    const prod = await apiFetch('/api/products');
-    state.products = prod && prod.success ? (prod.products || []).map(canonicalProduct) : [];
+    applySites(data);
+    saveSnapshot('sites', { success: true, sites: data.sites });
+  }
+
+  function applyIncome(data) {
+    state.products = (data.products || []).map(canonicalProduct);
     state.income = (data.entries || []).map((e) => ({ ...e, product: canonicalProduct(e.product), amount: num(e.amount), amount_bdt: num(e.amount_bdt), plan: e.plan || '' }));
     state.incomeSetupRequired = !!data.setupRequired;
     $('incomeSetup').classList.toggle('hidden', !state.incomeSetupRequired);
@@ -716,11 +776,24 @@ NOTIFY pgrst, 'reload schema';`;
     renderIncomeSection();
   }
 
-  async function loadExpenses() {
-    const data = await apiFetch(`/api/expenses?range=all`);
+  async function loadIncome() {
+    const [data, prod] = await Promise.all([apiFetch('/api/income'), apiFetch('/api/products')]);
     if (!data || !data.success) return;
+    const merged = { success: true, setupRequired: !!data.setupRequired, entries: data.entries || [], products: prod && prod.success ? (prod.products || []) : [] };
+    applyIncome(merged);
+    saveSnapshot('income', merged);
+  }
+
+  function applyExpenses(data) {
     state.expenses = (data.expenses || []).map((e) => ({ ...e, amount: num(e.amount), amount_bdt: num(e.amount_bdt) }));
     renderExpensesSection();
+  }
+
+  async function loadExpenses() {
+    const data = await apiFetch('/api/expenses?range=all');
+    if (!data || !data.success) return;
+    applyExpenses(data);
+    saveSnapshot('expenses', { success: true, expenses: data.expenses });
   }
 
   /* =====================================================================
@@ -934,7 +1007,7 @@ NOTIFY pgrst, 'reload schema';`;
     const box = $('topSitesContainer');
     const list = (top || []).filter((s) => s.total_income > 0);
     if (!list.length) {
-      box.innerHTML = `<div class="empty" style="padding:30px 10px"><p style="margin:0">No revenue recorded for ${esc(mLabel)} yet. Enter amounts in <b>Websites</b> or log an entry in <b>Income</b>.</p></div>`;
+      box.innerHTML = `<div class="empty" style="padding:30px 10px"><p style="margin:0">No revenue recorded for ${esc(mLabel)} yet. Log an entry in <b>Income</b>.</p></div>`;
       return;
     }
     box.innerHTML = list.map((s, i) => `
@@ -997,23 +1070,17 @@ NOTIFY pgrst, 'reload schema';`;
   /* =====================================================================
      Websites section
      ===================================================================== */
-  const sitesPeriod = createPeriod($('sitesPeriod'), {
-    presets: ['this_month', 'last_month', 'this_year', 'last_year', 'lifetime', 'custom'],
-    defaultPreset: 'this_month',
-    onChange: () => { sitesTable.resetPage(); loadSites(); }
-  });
-
   function expiryInfo(site) {
     const s = String(site.domain_expiry || '').trim();
     const parts = s.split('-');
-    if (!s || parts.length !== 3) return { time: Infinity, html: '<span class="meta-chip is-empty">No expiry</span>', urgent: false };
+    if (!s || parts.length !== 3) return { time: Infinity, html: '<span class="text-muted">—</span>', urgent: false };
     const target = Date.UTC(+parts[0], +parts[1] - 1, +parts[2]);
     const t = new Date();
     const today = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
     const days = Math.ceil((target - today) / 86400000);
     if (days <= 0) return { time: target, urgent: true, html: `<span class="meta-chip bad" title="Expired ${esc(s)}">${ic('alert', 'xs')}Expired ${esc(s)}</span>` };
     if (days <= 30) return { time: target, urgent: true, html: `<span class="meta-chip bad" title="${esc(s)}">${ic('alert', 'xs')}${days}d left · ${esc(s)}</span>` };
-    return { time: target, urgent: false, html: `<span class="meta-chip" title="${days} days remaining">${ic('calendar', 'xs')}${esc(s)} · ${days}d</span>` };
+    return { time: target, urgent: false, html: `<span class="meta-chip" title="${days} days remaining">${esc(s)} · ${days}d</span>` };
   }
 
   const siteName = (s) => s.site_name || s.site_url || '';
@@ -1031,48 +1098,38 @@ NOTIFY pgrst, 'reload schema';`;
     key: 'sites',
     table: $('sitesTable'),
     pager: $('sitesPager'),
-    defaultSort: { key: 'total', dir: 'desc' },
+    defaultSort: { key: 'name', dir: 'asc' },
     getRows: visibleSites,
     columns: [
       { key: 'idx', label: '#', align: 'center', width: '52px' },
-      { key: 'name', label: 'Site & author', sortable: true, sortValue: (s) => siteName(s) },
+      { key: 'name', label: 'Site', sortable: true, sortValue: (s) => siteName(s) },
+      { key: 'author', label: 'Author', sortable: true, sortValue: (s) => s.username || '' },
       { key: 'status', label: 'Status', sortable: true, sortValue: (s) => s.status || '' },
-      { key: 'domain', label: 'Domain & hosting', sortable: true, sortValue: (s) => expiryInfo(s).time },
-      { key: 'ads', label: 'Ads ($)', align: 'right', sortable: true, firstDir: 'desc', sortValue: (s) => s.ads_income },
-      { key: 'amazon', label: 'Amazon ($)', align: 'right', sortable: true, firstDir: 'desc', sortValue: (s) => s.amazon_income },
-      { key: 'total', label: 'Total', align: 'right', sortable: true, firstDir: 'desc', sortValue: (s) => s.total_income },
+      { key: 'tracking', label: 'Tracking ID', sortable: true, sortValue: (s) => s.amazon_tracking_id || '' },
+      { key: 'account', label: 'Account', sortable: true, sortValue: (s) => s.amazon_account || '' },
+      { key: 'registrar', label: 'Registrar', sortable: true, sortValue: (s) => s.domain_registrar || '' },
+      { key: 'hosting', label: 'Hosting', sortable: true, sortValue: (s) => s.hosting_provider || '' },
+      { key: 'expiry', label: 'Expiry', sortable: true, sortValue: (s) => expiryInfo(s).time },
       { key: 'act', label: '', align: 'right', width: '120px' }
     ],
     row(s, i) {
       const ex = expiryInfo(s);
-      const editable = state.sitesEditable;
-      const money = (field, color) => editable
-        ? `<input type="number" step="0.01" class="cell-input" style="color:${color}" data-field="${field}" data-id="${s.id}" value="${s[field] || 0}" aria-label="${field}">`
-        : `<span class="amount" style="color:${color}">${formatMoney(s[field])}</span>`;
+      const dash = '<span class="text-muted">—</span>';
       return `<tr data-site-id="${s.id}" class="${ex.urgent ? 'row-alert' : ''}">
         <td class="cell-idx">${i + 1}</td>
-        <td><a class="site-link" href="${esc(s.site_url)}" target="_blank" rel="noopener">${esc(siteName(s))}${ic('external', 'xs')}</a><div class="cell-sub">${esc(s.username || 'No author')}</div>
-          ${s.amazon_tracking_id || s.amazon_account ? `<div class="meta-chips" style="margin-top:6px">${s.amazon_tracking_id ? `<span class="meta-chip warn" title="Amazon tracking ID">${esc(s.amazon_tracking_id)}</span>` : ''}${s.amazon_account ? `<span class="meta-chip" title="Amazon account">${esc(s.amazon_account)}</span>` : ''}</div>` : ''}</td>
+        <td><a class="site-link" href="${esc(s.site_url)}" target="_blank" rel="noopener">${esc(siteName(s))}${ic('external', 'xs')}</a></td>
+        <td class="cell-plain">${s.username ? esc(s.username) : dash}</td>
         <td><select class="status-select ${esc(s.status)}" data-id="${s.id}" aria-label="Status">${['running', 'penalty', 'deleted', 'sold'].map((v) => `<option value="${v}" ${s.status === v ? 'selected' : ''}>${v === 'sold' ? 'Sold' : v[0].toUpperCase() + v.slice(1)}</option>`).join('')}</select></td>
-        <td><div class="meta-chips">
-          <span class="meta-chip ${s.domain_registrar ? '' : 'is-empty'}">${ic('globe', 'xs')}${esc(s.domain_registrar || 'No registrar')}</span>
-          <span class="meta-chip ${s.hosting_provider ? '' : 'is-empty'}">${ic('database', 'xs')}${esc(s.hosting_provider || 'No hosting')}</span>
-          ${ex.html}</div></td>
-        <td class="center">${money('ads_income', 'var(--info)')}</td>
-        <td class="center">${money('amazon_income', 'var(--warn)')}</td>
-        <td class="amount" data-cell="total">${formatMoney(s.total_income)}</td>
+        <td>${s.amazon_tracking_id ? `<span class="meta-chip warn">${esc(s.amazon_tracking_id)}</span>` : dash}</td>
+        <td>${s.amazon_account ? `<span class="meta-chip">${esc(s.amazon_account)}</span>` : dash}</td>
+        <td>${s.domain_registrar ? `<span class="meta-chip">${ic('globe', 'xs')}${esc(s.domain_registrar)}</span>` : dash}</td>
+        <td>${s.hosting_provider ? `<span class="meta-chip">${ic('database', 'xs')}${esc(s.hosting_provider)}</span>` : dash}</td>
+        <td>${ex.html}</td>
         <td><div class="cell-actions">
           <button class="icon-btn" data-act="edit" data-id="${s.id}" title="Edit site">${ic('edit', 'sm')}</button>
           <button class="icon-btn" data-act="copy" data-id="${s.id}" title="Copy URL">${ic('copy', 'sm')}</button>
           <button class="icon-btn danger" data-act="delete" data-id="${s.id}" title="Delete site">${ic('trash', 'sm')}</button>
         </div></td></tr>`;
-    },
-    foot(rows) {
-      const sum = (f) => rows.reduce((a, s) => a + f(s), 0);
-      return `<tr class="tfoot-total"><td></td><td colspan="3">${plural(rows.length, 'site')} · totals</td>
-        <td class="amount" style="color:var(--info);text-align:center">${formatMoney(sum((s) => s.ads_income))}</td>
-        <td class="amount" style="color:var(--warn);text-align:center">${formatMoney(sum((s) => s.amazon_income))}</td>
-        <td class="amount text-good">${formatMoney(sum((s) => s.total_income))}</td><td></td></tr>`;
     },
     empty() {
       if (!state.sites.length) {
@@ -1101,29 +1158,6 @@ NOTIFY pgrst, 'reload schema';`;
       if (el.matches('.status-select')) {
         const res = await apiFetch(`/api/sites/${id}`, { method: 'PUT', body: JSON.stringify({ status: el.value }) });
         if (res.success) { showToast('Status updated'); site.status = el.value; await loadSummary(); sitesTable.render(); }
-        return;
-      }
-      if (el.matches('.cell-input')) {
-        site[el.dataset.field] = parseFloat(el.value) || 0;
-        const res = await apiFetch('/api/metrics/update', {
-          method: 'POST',
-          body: JSON.stringify({
-            site_id: site.id,
-            month_key: state.sitesMonth,
-            articles_count: site.articles_count || 0,
-            cost: site.cost || 0,
-            ads_income: site.ads_income,
-            amazon_income: site.amazon_income,
-            other_income: site.other_income || 0
-          })
-        });
-        if (!res.success) return;
-        site.total_income = site.ads_income + site.amazon_income + site.other_income + (site.entry_income || 0);
-        const row = el.closest('tr');
-        row.querySelector('[data-cell="total"]').textContent = formatMoney(site.total_income);
-        sitesTable.renderFoot();
-        showToast('Saved ✓');
-        loadSummary();
       }
     }
   });
@@ -1267,6 +1301,27 @@ NOTIFY pgrst, 'reload schema';`;
     else { sel.value = value || sel.options[0].value; other.classList.add('hidden'); other.value = ''; }
   }
 
+  const isSiteIncome = () => $('incomeProduct').value.toLowerCase() === 'site income';
+  const splitPart = (desc, name) => { const m = new RegExp(`${name}\\s*\\$\\s*([\\d.]+)`, 'i').exec(desc || ''); return m ? m[1] : ''; };
+  const splitNote = (desc) => String(desc || '').replace(/(Ads|Amazon)\s*\$\s*[\d.]+/gi, '').replace(/^[\s,·+|/-]+|[\s,·+|/-]+$/g, '');
+
+  // Site Income: Ads + Amazon drive the amount, which locks while they are filled
+  function syncIncomeSplit() {
+    const on = isSiteIncome();
+    const ads = $('incomeAds').value;
+    const amazon = $('incomeAmazon').value;
+    const split = on && (ads !== '' || amazon !== '');
+    $('incomeSplit').classList.toggle('hidden', !on);
+    $('incomeAmount').readOnly = split;
+    $('incomeAmountBdt').readOnly = split;
+    if (split) {
+      const total = (parseFloat(ads) || 0) + (parseFloat(amazon) || 0);
+      $('incomeAmount').value = total.toFixed(2);
+      $('incomeAmountBdt').value = (total * (parseFloat($('incomeRate').value) || state.rate)).toFixed(2);
+    }
+    $('incomeSplitTotal').value = on ? $('incomeAmount').value : '';
+  }
+
   function openIncomeModal(entry) {
     const sel = $('incomeProduct');
     sel.innerHTML = productList().map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('') + '<option value="__other">＋ Add new product…</option>';
@@ -1282,6 +1337,15 @@ NOTIFY pgrst, 'reload schema';`;
     const rate = entry && entry.exchange_rate ? entry.exchange_rate : state.rate;
     $('incomeRate').value = rate;
     $('incomeAmountBdt').value = entry ? (entry.amount_bdt || (entry.amount * rate).toFixed(2)) : '';
+    // Prefill the split only when it adds up to the saved amount, so an old entry is never changed by opening it
+    const ads = entry ? splitPart(entry.description, 'Ads') : '';
+    const amazon = entry ? splitPart(entry.description, 'Amazon') : '';
+    if (entry && isSiteIncome() && (ads || amazon) && Math.abs((parseFloat(ads) || 0) + (parseFloat(amazon) || 0) - entry.amount) < 0.005) {
+      $('incomeAds').value = ads;
+      $('incomeAmazon').value = amazon;
+      $('incomeDescription').value = splitNote(entry.description);
+    }
+    syncIncomeSplit();
     updateRateHint();
     setModalTitle('incomeModal', entry ? 'Edit income' : 'Add income');
     $('incomeSubmitBtn').textContent = entry ? 'Save changes' : 'Save income';
@@ -1503,7 +1567,7 @@ NOTIFY pgrst, 'reload schema';`;
   function countUp(el, value) {
     const from = el._val || 0;
     el._val = value;
-    if (document.visibilityState !== 'visible' || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { el.textContent = bdt(Math.round(value)); return; }
+    if (!state.booted || document.visibilityState !== 'visible' || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { el.textContent = bdt(Math.round(value)); return; }
     const start = performance.now();
     cancelAnimationFrame(el._raf);
     const tick = (t) => {
@@ -1573,11 +1637,16 @@ NOTIFY pgrst, 'reload schema';`;
     }
   });
 
+  function applyEquity(data) {
+    state.equity = data;
+    renderEquity();
+  }
+
   async function loadEquity() {
     const data = await apiFetch(`/api/equity?rate=${state.rate}`);
     if (!data || !data.success) return;
-    state.equity = data;
-    renderEquity();
+    applyEquity(data);
+    saveSnapshot('equity', data);
   }
 
   function renderEquity() {
@@ -1880,11 +1949,14 @@ NOTIFY pgrst, 'reload schema';`;
     state.activeSection = name;
     try { localStorage.setItem('writerify_active_section', name); } catch (_) { /* ignore */ }
     document.querySelectorAll('.nav-item').forEach((i) => i.classList.toggle('active', i.dataset.nav === name));
-    document.querySelectorAll('.section').forEach((s) => s.classList.toggle('hidden', s.dataset.section !== name));
+    document.querySelectorAll('.section').forEach((s) => {
+      s.classList.toggle('hidden', s.dataset.section !== name);
+      s.classList.toggle('enter', state.booted && s.dataset.section === name);
+    });
     $('pageTitle').textContent = SECTIONS[name][0];
     $('pageSub').textContent = SECTIONS[name][1];
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (name === 'equity') loadEquity(); // income or costs may have changed elsewhere
+    if (name === 'equity' && state.booted) loadEquity(); // income or costs may have changed elsewhere
   }
   window.switchSection = switchSection;
 
@@ -2101,6 +2173,10 @@ NOTIFY pgrst, 'reload schema';`;
         amount_bdt: parseFloat($('incomeAmountBdt').value) || 0,
         exchange_rate: parseFloat($('incomeRate').value) || state.rate
       };
+      if (isSiteIncome() && ($('incomeAds').value !== '' || $('incomeAmazon').value !== '')) {
+        const parts = [['Ads', $('incomeAds').value], ['Amazon', $('incomeAmazon').value]].filter(([, v]) => parseFloat(v) > 0).map(([k, v]) => `${k} $${parseFloat(v)}`);
+        payload.description = [parts.join(', '), splitNote(payload.description)].filter(Boolean).join(' · ');
+      }
       // A brand-new product is registered so it stays in every list, even before it earns
       if ($('incomeProduct').value === '__other') await registerProduct(payload.product);
       const btn = $('incomeSubmitBtn');
@@ -2138,6 +2214,9 @@ NOTIFY pgrst, 'reload schema';`;
       if (usd.value !== '') bdtEl.value = (parseFloat(usd.value) * rate()).toFixed(2);
       updateRateHint();
     });
+
+    ['incomeAds', 'incomeAmazon', 'incomeAmount', 'incomeAmountBdt', 'incomeRate'].forEach((id) => $(id).addEventListener('input', syncIncomeSplit));
+    $('incomeProduct').addEventListener('change', syncIncomeSplit);
 
     // Expense modal: same USD <-> BDT live conversion
     const cUsd = $('costAmount');
@@ -2250,18 +2329,15 @@ NOTIFY pgrst, 'reload schema';`;
     }
     setupAuthHandlers();
 
-    const token = getAuthToken();
-    if (!token) { showLoginScreen(); return; }
-    try {
-      const res = await fetch('/api/auth/verify', { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error('Session invalid');
-      showAppContainer();
-      setupEventListeners();
-      await loadAllData();
-    } catch (_) {
-      setAuthToken(null);
-      showLoginScreen();
-    }
+    if (!getAuthToken()) { showLoginScreen(); return; }
+    await startApp(); // a dead token comes back as 401 and returns to the login screen
+  }
+
+  async function startApp() {
+    showAppContainer();
+    setupEventListeners();
+    document.body.classList.toggle('is-booting', !paintSnapshot());
+    await loadAllData();
   }
 
   document.addEventListener('DOMContentLoaded', init);
