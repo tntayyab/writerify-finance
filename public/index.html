@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <script>try { if (localStorage.getItem('writerify_auth_token')) document.documentElement.classList.add('has-session'); } catch (e) {}</script>
-  <link rel="stylesheet" href="styles.css?v=5.3">
+  <link rel="stylesheet" href="styles.css?v=5.4">
 </head>
 <body>
   <div id="toast" class="toast"></div>
@@ -241,7 +241,6 @@
 
           <!-- ================= INCOME ================= -->
           <section id="incomeSection" class="section hidden" data-section="income">
-            <div class="card period-bar"><div class="period" id="incomePeriod"></div></div>
             <div id="incomeSetup" class="notice hidden">
               <i data-ic="alert"></i>
               <div style="min-width:0;flex:1">
@@ -272,6 +271,8 @@
                   <div class="search"><i data-ic="search" data-cls="sm"></i><input type="text" id="incomeSearchInput" class="input" placeholder="Search title, description or site…"></div>
                   <select id="incomeProductFilter" class="select select-sm"></select>
                   <select id="incomeSiteFilter" class="select select-sm"></select>
+                  <div class="period" id="incomePeriod"></div>
+                  <select id="incomeSourceFilter" class="select select-sm hidden" aria-label="Income source"><option value="">Ads + Amazon</option><option value="Ads">Only Ads</option><option value="Amazon">Only Amazon</option></select>
                   <span class="grow"></span>
                   <button id="exportIncomeCsvBtn2" class="btn btn-ghost btn-sm"><i data-ic="download" data-cls="sm"></i><span class="btn-label">Export</span></button>
                   <button id="openAddProductBtn" class="btn btn-ghost btn-sm"><i data-ic="plus" data-cls="sm"></i>New product</button>
@@ -626,6 +627,6 @@
     <linearGradient id="gradBrand" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8272ff"/><stop offset="100%" stop-color="#f472b6"/></linearGradient>
   </defs></svg>
 
-  <script src="app.js?v=5.3"></script>
+  <script src="app.js?v=5.4"></script>
 </body>
 </html>

@@ -225,6 +225,7 @@ NOTIFY pgrst, 'reload schema';`;
     incomeSearch: '',
     incomeProduct: '',
     incomeSite: '',
+    incomeSource: '',
     expenseSearch: '',
     expenseCategory: '',
     expensePaid: '',
@@ -412,7 +413,7 @@ NOTIFY pgrst, 'reload schema';`;
     sel.value = key;
   }
 
-  function createPeriod(root, { presets, defaultPreset, storageKey, onChange }) {
+  function createPeriod(root, { presets, defaultPreset, storageKey, onChange, compact }) {
     let preset = defaultPreset;
     const custom = { from: '', to: '', month: '' };
     try {
@@ -422,11 +423,12 @@ NOTIFY pgrst, 'reload schema';`;
 
     const label = (p) => (p === 'month' ? formatMonthLabel(custom.month) : PRESET_LABELS[p]);
 
-    root.innerHTML = `<select class="select select-sm" data-month-select aria-label="Month"></select><div class="chips"></div>
+    root.innerHTML = `<select class="select select-sm" data-month-select aria-label="Month"></select>${compact ? `<select class="select select-sm" data-preset-select aria-label="Period"><option value="month" hidden>By month</option>${presets.map((p) => `<option value="${p}">${esc(PRESET_LABELS[p])}</option>`).join('')}</select>` : '<div class="chips"></div>'}
       <div class="custom-range hidden"><span>FROM</span><input type="date" class="input" data-k="from"><span>TO</span><input type="date" class="input" data-k="to"></div>`;
     const chipsEl = root.querySelector('.chips');
     const customEl = root.querySelector('.custom-range');
     const monthSel = root.querySelector('[data-month-select]');
+    const presetSel = root.querySelector('[data-preset-select]');
     fillMonthSelect(monthSel, 'Select month');
     monthSel.addEventListener('change', () => {
       preset = monthSel.value ? 'month' : defaultPreset;
@@ -436,19 +438,25 @@ NOTIFY pgrst, 'reload schema';`;
     });
 
     function drawChips() {
-      chipsEl.innerHTML = presets.map((p) => `<button type="button" class="chip ${p === preset ? 'active' : ''}" data-p="${p}">${p === 'custom' ? ic('calendar', 'xs') : ''}${esc(label(p))}</button>`).join('');
+      if (presetSel) presetSel.value = preset;
+      else chipsEl.innerHTML = presets.map((p) => `<button type="button" class="chip ${p === preset ? 'active' : ''}" data-p="${p}">${p === 'custom' ? ic('calendar', 'xs') : ''}${esc(label(p))}</button>`).join('');
       customEl.classList.toggle('hidden', preset !== 'custom');
       monthSel.value = preset === 'month' ? custom.month : '';
     }
 
-    chipsEl.addEventListener('click', (e) => {
-      const b = e.target.closest('.chip');
-      if (!b) return;
-      preset = b.dataset.p;
+    const pickPreset = (p) => {
+      preset = p;
       try { if (storageKey) localStorage.setItem(storageKey, preset); } catch (_) { /* ignore */ }
       drawChips();
       onChange();
-    });
+    };
+    if (presetSel) presetSel.addEventListener('change', () => pickPreset(presetSel.value));
+    else {
+      chipsEl.addEventListener('click', (e) => {
+        const b = e.target.closest('.chip');
+        if (b) pickPreset(b.dataset.p);
+      });
+    }
     customEl.addEventListener('change', (e) => {
       const k = e.target.dataset.k;
       if (!k) return;
@@ -1171,6 +1179,7 @@ NOTIFY pgrst, 'reload schema';`;
     presets: ['this_month', 'last_month', 'last_30', 'this_year', 'last_year', 'lifetime', 'custom'],
     defaultPreset: 'lifetime',
     storageKey: 'wf_period_income',
+    compact: true,
     onChange: () => { incomeTable.resetPage(); renderIncomeSection(); }
   });
 
@@ -1185,7 +1194,16 @@ NOTIFY pgrst, 'reload schema';`;
       return [e.title, e.description, e.site_name, e.product].some((v) => String(v || '').toLowerCase().includes(q));
     });
   }
-  const incomeRows = () => incomeBase().filter((e) => !state.incomeProduct || e.product.toLowerCase() === state.incomeProduct.toLowerCase());
+  // With a source picked, each Site Income row shrinks to just that source's share of the entry
+  function sourceRow(e) {
+    const usd = parseFloat(splitPart(e.description, state.incomeSource)) || 0;
+    if (!usd) return null;
+    return { ...e, amount: usd, amount_bdt: usd * (e.amount ? bdtVal(e) / e.amount : state.rate) };
+  }
+  function incomeRows() {
+    const rows = incomeBase().filter((e) => !state.incomeProduct || e.product.toLowerCase() === state.incomeProduct.toLowerCase());
+    return state.incomeSource ? rows.map(sourceRow).filter(Boolean) : rows;
+  }
 
   const incomeTable = createTable({
     key: 'income',
@@ -1265,6 +1283,10 @@ NOTIFY pgrst, 'reload schema';`;
   }
 
   function renderIncomeSection() {
+    const siteIncome = state.incomeProduct.toLowerCase() === 'site income';
+    if (!siteIncome) state.incomeSource = '';
+    $('incomeSourceFilter').classList.toggle('hidden', !siteIncome);
+    $('incomeSourceFilter').value = state.incomeSource;
     const base = incomeBase();
     const rows = incomeRows();
     const total = rows.reduce((a, e) => a + e.amount, 0);
@@ -1272,7 +1294,7 @@ NOTIFY pgrst, 'reload schema';`;
     const untagged = rows.filter((e) => !e.site_id).length;
 
     $('incTotal').textContent = bdt(bdtOf(rows));
-    $('incRangeLabel').textContent = `${money2(total)} · ${incomePeriod.describe()}`;
+    $('incRangeLabel').textContent = `${money2(total)} · ${state.incomeSource ? `${state.incomeSource} only · ` : ''}${incomePeriod.describe()}`;
     $('incCount').textContent = rows.length.toLocaleString();
     $('incAvg').textContent = `Avg ${bdt(rows.length ? bdtOf(rows) / rows.length : 0)} / entry`;
     $('incSites').textContent = sites.size.toLocaleString();
@@ -2050,6 +2072,7 @@ NOTIFY pgrst, 'reload schema';`;
     debounceInput($('incomeSearchInput'), (v) => { state.incomeSearch = v; incomeTable.resetPage(); renderIncomeSection(); });
     $('incomeProductFilter').addEventListener('change', (e) => { state.incomeProduct = e.target.value; incomeTable.resetPage(); renderIncomeSection(); });
     $('incomeSiteFilter').addEventListener('change', (e) => { state.incomeSite = e.target.value; incomeTable.resetPage(); renderIncomeSection(); });
+    $('incomeSourceFilter').addEventListener('change', (e) => { state.incomeSource = e.target.value; incomeTable.resetPage(); renderIncomeSection(); });
     $('incomeProducts').addEventListener('click', (e) => {
       const card = e.target.closest('.product-card');
       if (!card) return;
@@ -2178,6 +2201,7 @@ NOTIFY pgrst, 'reload schema';`;
       if (state.incomeProduct && state.incomeProduct.toLowerCase() !== payload.product.toLowerCase()) { state.incomeProduct = ''; }
       if (state.incomeSite && state.incomeSite !== String(payload.site_id || '')) { state.incomeSite = ''; }
       if (state.incomeSearch) { state.incomeSearch = ''; $('incomeSearchInput').value = ''; }
+      state.incomeSource = '';
       incomeTable.resetPage();
       closeAllModals();
       await Promise.all([loadIncome(), loadSummary(), loadSites()]);
